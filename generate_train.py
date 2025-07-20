@@ -8,19 +8,46 @@ import pandas as pd
 import numpy as np
 
 # Load the pickle file
-with open('pdb_xyz_data.pkl', 'rb') as f:
+with open('../fixed_deduped_pdb_xyz_data.pkl', 'rb') as f:
     data = pickle.load(f)
 
 
-# for f in data['filtered_cif_files']:
-#     if '7M57' in f:
-#         print(f)
-#         exit()
-# exit()
+rna_atom_groups = {
+    "A": {
+        "all": ["P", "OP1", "OP2", "O5'","O3'"]+\
+               ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'"]+\
+               ["N9", "N1", "C2", "N3", "C4", "C5", "C6", "N7", "C8", "N6"]
+    },
+    "U": {
+        "all": ["P", "OP1", "OP2", "O5'","O3'"]+\
+               ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'"]+\
+               ["N1", "C2", "O2", "N3", "C4", "O4", "C5", "C6"]
+    },
+    "G": {
+        "all": ["P", "OP1", "OP2", "O5'","O3'"]+\
+                     ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'"]+\
+                     ["N9", "N1", "C2", "N2", "N3", "C4", "C5", "C6", "O6", "N7", "C8", ]
+    },
+    "C": {
+        "all": ["P", "OP1", "OP2", "O5'","O3'"]+\
+                     ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'"]+\
+                     ["N1", "C2", "O2", "N3", "C4", "N4", "C5", "C6"]
+    },
+    "N": {
+        "all": ["P", "OP1", "OP2", "O5'","O3'"]+\
+                     ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'"]+\
+                     ["N1", "C2", "O2", "N3", "C4", "N4", "C5", "C6"]
+    }
+}
 
 #load aligned sequences
 with open('aligned_sequences.pkl', 'rb') as f:
     aligned_sequences = pickle.load(f)
+
+
+#merge data and aligned sequences
+#exit()
+
 
 wrong_alignments = 0
 train_sequences = []
@@ -30,7 +57,7 @@ for i in tqdm(range(len(aligned_sequences))):
 
 
     #pdb_id=aligned_sequences[i]['pdb_id']
-    pdb_id=data['filtered_cif_files'][i].split('/')[1].split('.')[0]#.strip(".cif")
+    pdb_id=data['filtered_cif_files'][i].split('/')[-1].split('.')[0]#.strip(".cif")
     #exit()
     realease_date=data['publication_date'][i]
     description=aligned_sequences[i]['description']
@@ -63,25 +90,45 @@ for i in tqdm(range(len(aligned_sequences))):
         assert len(non_gapped_indices)==len(data['xyz'][i])
 
         # len(sequence)x3 nan default array
-        xyz=np.full((len(alignment[0]),3), np.nan)
-        for j,k in enumerate(non_gapped_indices):
-            xyz[k]=data['xyz'][i][j]['sugar_ring'][0]
-        sequence=alignment[1]
-    else:
-        xyz=np.full((len(sequence),3), np.nan)
-        for j in range(len(sequence)):
-            xyz[j]=data['xyz'][i][j]['sugar_ring'][0]
+        # xyz=np.full((len(alignment[0]),3), np.nan)
+        # for j,k in enumerate(non_gapped_indices):
+        #     xyz[k]=data['xyz'][i][j]['sugar_ring'][0]
+        # sequence=alignment[1]
 
+        xyz = [{} for _ in range(len(alignment[0]))]
+
+        for j,k in enumerate(non_gapped_indices):
+            xyz[k] = data['xyz'][i][j]['all']
+
+
+
+    else:
+        xyz=[{} for _ in range(len(sequence))]
+        for j in range(len(sequence)):
+            xyz[j]=data['xyz'][i][j]['all']
+    # print(xyz)
+    # exit()
     train_data=[]
     for j in range(len(sequence)):
-        train_data.append({"ID":f"{pdb_id}_{j+1}", 'resname':sequence[j], 'resid':j+1, 'x_1':xyz[j][0], 'y_1':xyz[j][1], 'z_1':xyz[j][2]})
+        resname=sequence[j]
+        atom_names= rna_atom_groups[resname]["all"] if resname in rna_atom_groups else []
+        row={"ID":f"{pdb_id}_{j+1}", 'resname':sequence[j], 'resid':j+1}
+
+        for k,atom_name in enumerate(atom_names):
+
+            row[f"{atom_name}_x"] = xyz[j][k][0] if k < len(xyz[j]) else np.nan
+            row[f"{atom_name}_y"] = xyz[j][k][1] if k < len(xyz[j]) else np.nan
+            row[f"{atom_name}_z"] = xyz[j][k][2] if k < len(xyz[j]) else np.nan
+        train_data.append(row)
+
+        #train_data.append({"ID":f"{pdb_id}_{j+1}", 'resname':sequence[j], 'resid':j+1, 'x_1':xyz[j][0], 'y_1':xyz[j][1], 'z_1':xyz[j][2]})
     train_data=pd.DataFrame(train_data)
     train_solution.append(train_data)
     train_sequences.append({'target_id':pdb_id, 'sequence':sequence, 'temporal_cutoff':realease_date, 'description':description, 'all_sequences':all_sequences})
 
     for nt1, nt2 in zip(train_data['resname'],sequence):
         assert nt1==nt2
-
+    #exit()
     #write solution df
 
 
@@ -93,5 +140,5 @@ train_sequences=pd.DataFrame(train_sequences)
 train_solution=pd.concat(train_solution)
 
 #write solution df
-train_sequences.to_csv('train_sequences.v0.5.1.csv', index=False)
-train_solution.to_csv('train_solution.v0.5.1.csv', index=False)
+train_sequences.to_csv('train_sequences_allatom.csv', index=False)
+train_solution.to_csv('train_solution_allatom.csv', index=False)
