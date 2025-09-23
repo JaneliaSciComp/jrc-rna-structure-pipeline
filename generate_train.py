@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 
 # Load the pickle file
-with open('../fixed_deduped_pdb_xyz_data.pkl', 'rb') as f:
+with open('deduped_pdb_xyz_data.pkl', 'rb') as f:
     data = pickle.load(f)
 
 

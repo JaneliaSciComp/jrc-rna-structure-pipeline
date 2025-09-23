@@ -3,12 +3,11 @@ from tqdm import tqdm
 import numpy as np
 import pandas as pd
 from Bio.PDB.MMCIF2Dict import MMCIF2Dict
-import matplotlib.pyplot as plt
 from collections import defaultdict
 import pandas as pd
 from utils import *
 
-cif_files=glob("../Stanford3D_dataprocessing_add_modified_nts3/split_chains/*.cif")
+cif_files=glob("./split_chains/*.cif")
 # len(cif_files)
 
 # stats=pd.read_csv("extracted_structures.csv")
