@@ -26,6 +26,7 @@ def split_cif_by_chains(input_cif, output_dir):
     # Map of modified nucleotides to their unmodified counterparts
     #modified_to_unmodified =  
     # Manually curated mapping of noncanonical residue names to RNA.
+    # TODO: Consider assigning based on ability to pair
     modified_to_unmodified = {   'A'  :'  A',   'C':'  C',   'G':'  G',   'U':'  U',\
                     '5BU':'  U', 'OMC':'  C', '5MC':'  C', 'CCC':'  C', ' DC':'  C', \
                     'CBR':'  C', 'CBV':'  C', 'CB2':'  C', '2MG':'  G', \
@@ -39,7 +40,7 @@ def split_cif_by_chains(input_cif, output_dir):
                     'LV2':'  C', '4AC':'  C', 'UY4':'  A', 'I2T':'  C', '7SN':'  G', 'SUR':'  U', '7S3':'  G', \
                     'LHH':'  C', 'FHU':'  U', 'B9H':'  C', 'M1Y':'  U', 'B8Q':'  C',\
                     'M7A':'  A', 'B8K':'  G', '2PR':'  G', 'LCG':'  G', 'UFT':'  U', 'CFZ':'  C', \
-                    'DA' :'  A',  'DC':'  C',  'DG':'  G',  'DT':'  U', '3AU':'  U', '9QV':'  U',' DU':'  U',
+                     '3AU':'  U', '9QV':'  U', 
                     'CFL':'  C', 'T2T':'  T', 'N'  :'  A', 'I'  :'  G', 'GRB':'  G', 'E3C':'  C', \
                     'MMX':'  C', '1W5':'  C', '8AZ':'  G', 'B8T':'  C', 'UY1':'  U', '75B':'  U', \
                     '4DU':'  A', '5HM':'  C', '6FC':'  C', 'E7G':'  G', 'MHG':'  G', 'DU' :'  U', \
@@ -47,6 +48,8 @@ def split_cif_by_chains(input_cif, output_dir):
                     '6IA':'  A', 'CM0':'  U', '2MA':'  A', 'RSP':'  U', 'UD5':'  U', 'MUM':'  U', \
                     'IU' :'  U', '12A':'  A', '70U':'  U', 'U8U':'  U',  'YG':'  G', 'BRU':'  U', \
                     'ATP':'  A', 'CTP':'  C', 'UTP':'  U', '5IU':'  I', 'GDP':'  G', '5IC':'  C', \
+                    # These are DNA residues that we map to RNA, so it will effectively extract DNA too if these are included
+                    # 'DA' :'  A',  'DC':'  C',  'DG':'  G',  'DT':'  U', ' DU':'  U'
                 }
 
     for key in modified_to_unmodified:
@@ -72,6 +75,7 @@ def split_cif_by_chains(input_cif, output_dir):
                 # if residue.id[0] != " ":
                 #     print(residue.resname)
                 #exclude heteroatoms and non canonical residues
+                # FIXME: That will leave fragments, make sure we want that
                 if residue.resname not in {"A", "U", "G", "C"} or residue.id[0] != " ":
                     to_delete.append(residue.id)
             #exit()
@@ -85,12 +89,16 @@ def split_cif_by_chains(input_cif, output_dir):
                 #del chain.child_dict[res_id]
 
             #print(list(chain.child_dict.keys()))
-            
+            # FIXME: configurable minimum length 
             # continue if the chain has at least 10 residues left
             if len(chain.child_dict) < 10:
                 continue
 
             # Check if 0.5 or more of the residues are RNA
+            # FIXME: configurable threshold
+            # TODO:idealy that should depend on the interactions, ie. it is fine to keep 
+            #      RNA from protein complex if the RNA is interacting in limited fashion with the protein
+            #      alternatively assign score for further filtering
             is_rna = np.array([residue.resname in ["A", "C", "G", "U"] for residue in chain.get_residues()]).mean() >= 0.5
             # print([residue.resname for residue in chain.get_residues()])  
             # print(chain)
