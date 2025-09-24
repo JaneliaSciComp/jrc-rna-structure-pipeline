@@ -7,7 +7,7 @@ from collections import defaultdict
 import pandas as pd
 from utils import *
 
-cif_files=glob("./split_chains/*.cif")
+cif_files = glob("./split_chains/*.cif")
 # len(cif_files)
 
 # stats=pd.read_csv("extracted_structures.csv")
@@ -17,27 +17,28 @@ cif_files=glob("./split_chains/*.cif")
 
 # filtered_cif_files=[f for f in cif_files if f in stats.index and stats.loc[f,'structuredness']>structure_cutoff]
 
-filtered_cif_files=cif_files
-# print("after filtering by structuredness there are:", len(filtered_cif_files)) 
+filtered_cif_files = cif_files
+# print("after filtering by structuredness there are:", len(filtered_cif_files))
 # print(len(filtered_cif_files))
 
-#exit()
+# exit()
+
 
 def get_nan_vector():
     # Create a 1x3 vector of NaNs
     nan_vector = np.full((3), np.nan)
 
     # Alternatively, using numpy.array
-    #nan_vector_alt = np.array([np.nan, np.nan, np.nan]).reshape(1, 3)
+    # nan_vector_alt = np.array([np.nan, np.nan, np.nan]).reshape(1, 3)
     return nan_vector
+
 
 from Bio import SeqIO
 
-def get_sequence(file):
 
+def get_sequence(file):
     # Step 2: Replace "RNAsolo_member_cif" with "solo_member_fasta"
     modified_string = file.replace(".cif", ".fasta")
-
 
     # Read the raw sequence
     with open(modified_string, "r") as file:
@@ -45,9 +46,10 @@ def get_sequence(file):
         file.readline()
 
         # Read the remaining lines and join them into a single sequence string
-        sequence = ''.join(line.strip() for line in file)
-        
+        sequence = "".join(line.strip() for line in file)
+
     return sequence
+
 
 # rna_atom_groups = {
 #     "A": {
@@ -77,102 +79,105 @@ def get_sequence(file):
 #     }
 # }
 
+phosphate = ["P", "OP1", "OP2", "OP3"]  # OP3 will be missing in polymers
+sugar = ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'", "O5'", "O2'", "O3'"]
+
+# fmt: off
 rna_atom_groups = {
     "A": {
-        "all": ["P", "OP1", "OP2", "O5'","O3'"]+\
-               ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'"]+\
+        "all": phosphate + sugar + \
                ["N9", "N1", "C2", "N3", "C4", "C5", "C6", "N7", "C8", "N6"]
     },
     "U": {
-        "all": ["P", "OP1", "OP2", "O5'","O3'"]+\
-               ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'"]+\
+        "all": phosphate + sugar + \
                ["N1", "C2", "O2", "N3", "C4", "O4", "C5", "C6"]
     },
     "G": {
-        "all": ["P", "OP1", "OP2", "O5'","O3'"]+\
-                     ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'"]+\
-                     ["N9", "N1", "C2", "N2", "N3", "C4", "C5", "C6", "O6", "N7", "C8", ]
+        "all": phosphate + sugar + \
+               ["N9", "N1", "C2", "N2", "N3", "C4", "C5", "C6", "O6", "N7", "C8", ]
     },
     "C": {
-        "all": ["P", "OP1", "OP2", "O5'","O3'"]+\
-                     ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'"]+\
-                     ["N1", "C2", "O2", "N3", "C4", "N4", "C5", "C6"]
+        "all": phosphate + sugar + \
+                ["N1", "C2", "O2", "N3", "C4", "N4", "C5", "C6"]
     },
     "N": {
-        "all": ["P", "OP1", "OP2", "O5'","O3'"]+\
-                     ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'"]+\
-                     ["N1", "C2", "O2", "N3", "C4", "N4", "C5", "C6"]
+        "all": phosphate + sugar 
     }
 }
+# fmt: on
 
 
 def get_xyz_sequence(file):
     pdb_info = MMCIF2Dict(file)
 
     xyz = [
-        pdb_info['_atom_site.Cartn_x'],
-        pdb_info['_atom_site.Cartn_y'],
-        pdb_info['_atom_site.Cartn_z']
+        pdb_info["_atom_site.Cartn_x"],
+        pdb_info["_atom_site.Cartn_y"],
+        pdb_info["_atom_site.Cartn_z"],
     ]
 
-    xyz = np.array(xyz, dtype='float32').T
+    xyz = np.array(xyz, dtype="float32").T
 
-    seq_id = np.array([float(x) if x != '.' else np.nan for x in pdb_info['_atom_site.label_seq_id']], dtype='float32')
-    atom_id = np.array(pdb_info['_atom_site.label_atom_id'])
-    res_id = np.array(pdb_info['_atom_site.label_comp_id'])
+    seq_id = np.array(
+        [float(x) if x != "." else np.nan for x in pdb_info["_atom_site.label_seq_id"]],
+        dtype="float32",
+    )
+    atom_id = np.array(pdb_info["_atom_site.label_atom_id"])
+    res_id = np.array(pdb_info["_atom_site.label_comp_id"])
 
-    unique_seq_id = np.unique(seq_id[seq_id==seq_id]).astype('int')
+    unique_seq_id = np.unique(seq_id[seq_id == seq_id]).astype("int")
     sequence_res = get_sequence(file)
-    sequence_complete = ['N'] * int(unique_seq_id.max().item())
+    sequence_complete = ["N"] * int(unique_seq_id.max().item())
 
-    if len(unique_seq_id)!=len(sequence_res): #skip some special cases like HEATOM
+    if len(unique_seq_id) != len(sequence_res):  # skip some special cases like HEATOM
         return None, None, None
-    
+
     for i, nt in zip(unique_seq_id, sequence_res):
         if i > 0:
             sequence_complete[i - 1] = nt
 
-    grouped_xyz= []
-
+    grouped_xyz = []
 
     for i in range(len(sequence_complete)):
         res = sequence_complete[i]
         atom_groups = rna_atom_groups[res]
         atom_coords = defaultdict(list)
-        
-        if res in ['A','U','G','C']:
-            
-            for group in atom_groups:
-                
-                for atom_key in atom_groups[group]:
 
-                    if atom_key!="O3'":
-                        atom_index = np.where((seq_id == (i+1)) & (atom_id == atom_key))[0]
+        if res in ["A", "U", "G", "C"]:
+            for group in atom_groups:
+                for atom_key in atom_groups[group]:
+                    if atom_key != "O3'":
+                        atom_index = np.where(
+                            (seq_id == (i + 1)) & (atom_id == atom_key)
+                        )[0]
                     else:
-                        atom_index = np.where((seq_id == (i)) & (atom_id == atom_key))[0] #take O3' from previous nucleotide
-                    #atom_index = np.where((seq_id == (i+1)) & (atom_id == atom_key))[0]
+                        atom_index = np.where((seq_id == (i)) & (atom_id == atom_key))[
+                            0
+                        ]  # take O3' from previous nucleotide
+                    # atom_index = np.where((seq_id == (i+1)) & (atom_id == atom_key))[0]
                     if len(atom_index) > 0:
                         atom_coords[group].append(xyz[atom_index[0]])
                     else:
                         atom_coords[group].append(get_nan_vector())
         else:
-            for group in atom_groups:                
+            for group in atom_groups:
                 for atom_key in atom_groups[group]:
                     atom_coords[group].append(get_nan_vector())
 
         for group in atom_groups:
-            atom_coords[group]=np.array(atom_coords[group]).astype('float32')
+            atom_coords[group] = np.array(atom_coords[group]).astype("float32")
 
         grouped_xyz.append(atom_coords)
 
     assert len(sequence_complete) == len(grouped_xyz)
 
-    #xyz_3bead = np.array(xyz_3bead, dtype='float32')
-    #data_3_bead.append(xyz_3bead)
+    # xyz_3bead = np.array(xyz_3bead, dtype='float32')
+    # data_3_bead.append(xyz_3bead)
     # data_sequence.append(''.join(sequence_complete))
     # data_xyz.append(grouped_xyz)
 
-    return ''.join(sequence_complete), grouped_xyz, file
+    return "".join(sequence_complete), grouped_xyz, file
+
 
 # data_xyz = []
 # data_sequence = []
@@ -185,6 +190,7 @@ from functools import partial
 from tqdm import tqdm
 import pickle
 
+
 # Function to wrap `get_xyz_sequence` for multiprocessing
 def process_file(file):
     try:
@@ -193,8 +199,9 @@ def process_file(file):
         print(f"Error processing {file}: {e}")
         return None, None
 
-#if __name__ == "__main__":
-    # Use all available CPU cores
+
+# if __name__ == "__main__":
+# Use all available CPU cores
 num_cores = cpu_count()
 
 print(f"Using {num_cores} cores for multiprocessing")
@@ -202,7 +209,9 @@ print(f"Using {num_cores} cores for multiprocessing")
 # Initialize the pool of workers
 with Pool(num_cores) as pool:
     # Use tqdm to track progress
-    results = list(tqdm(pool.imap(process_file, filtered_cif_files), total=len(filtered_cif_files)))
+    results = list(
+        tqdm(pool.imap(process_file, filtered_cif_files), total=len(filtered_cif_files))
+    )
 
 data_xyz = []
 data_sequence = []
@@ -220,6 +229,7 @@ print(f"Processed {len(data_sequence)} sequences and their coordinates.")
 
 # Save results as a pickle dict
 with open("raw_pdb_xyz_data.pkl", "wb+") as f:
-    pickle.dump({"sequence": data_sequence, "xyz": data_xyz, "data_cif_files": data_cif_files}, f)
-
-
+    pickle.dump(
+        {"sequence": data_sequence, "xyz": data_xyz, "data_cif_files": data_cif_files},
+        f,
+    )
