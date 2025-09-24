@@ -1,5 +1,7 @@
+from pathlib import Path
 import requests
 import json
+import jsonpath_ng
 from multiprocessing import Pool, cpu_count
 import os
 
@@ -12,7 +14,7 @@ SEARCH_API = "https://search.rcsb.org/rcsbsearch/v2/query"
 DOWNLOAD_PDB = "https://files.rcsb.org/download/{pdb_id}.pdb"
 DOWNLOAD_CIF = "https://files.rcsb.org/download/{pdb_id}.cif"
 DOWNLOAD_FASTA = "https://www.rcsb.org/fasta/entry/{pdb_id}"
-SUMMARY_API = "https://data.rcsb.org/rest/v1/core/structure/{pdb_id}"
+SUMMARY_API = "https://data.rcsb.org/rest/v1/core/entry/{pdb_id}"
 
 
 SEARCH_QUERIES = {
@@ -37,7 +39,6 @@ SEARCH_QUERIES = {
 def search_rna_structures(
     start_date="now-1w", stop_date="now", search_type="polymer_type", search_term="RNA"
 ):
-    
     search_query = SEARCH_QUERIES.get(search_type)
     if search_query is None:
         raise ValueError(f"Unsupported search_type: {search_type}")
@@ -66,7 +67,7 @@ def search_rna_structures(
                         "value": f"{stop_date}",
                     },
                 },
-                SEARCH_QUERIES[search_type]
+                SEARCH_QUERIES[search_type],
             ],
         },
         "return_type": "entry",
@@ -84,24 +85,76 @@ def search_rna_structures(
         return []
 
 
-# Fetch resolution and save PDB/CIF/FASTA files
+# Extra metadata fields to extract from the summary API, key is the desired field name, value is dot notation key to extract
+extra_metadata_fields = {
+    "Release": "rcsb_accession_info.initial_release_date",
+    "Resolution": "rcsb_entry_info.resolution_combined.0",
+    "Method": "rcsb_entry_info.experimental_method",
+    "Title": "struct.title",
+    "Description": "struct.title",
+    "Keywords": "struct_keywords.pdbx_keywords",
+}
+
+
+# TODO: Use jsonpath for more complex queries if needed
+def get_dot_notation_item(data, path):
+    keys = path.split(".")
+    value = data
+    current_path = ""
+    for key in keys:
+        # Check if map or list, and access accordingly
+        if isinstance(value, dict):
+
+            def accessor(v, k):
+                return v.get(k, None)
+        elif isinstance(value, list):
+            # Convert key to int
+            def accessor(v, k):
+                return v[int(k)]
+        else:
+            raise ValueError(
+                f"Data at path {current_path} is neither dict nor list. Unable to access key {key} "
+            )
+        value = accessor(value, key)
+        if value is None:
+            raise ValueError(f"Key {key} not found in data[{current_path}]")
+        current_path += f".{key}" if current_path else key
+    return value
+
+
+# Function to extract specified metadata fields from the JSON response
+def get_metadata_fields(metadata_file, metadata_fields):
+    metadata = {}
+    with open(metadata_file, "r") as f:
+        data = json.load(f)
+        for field, path in metadata_fields.items():
+            try:
+                value = get_dot_notation_item(data, path)
+                metadata[field] = value
+            except Exception as e:
+                print(f"Error reading {path} from {metadata_file}: {e}")
+                metadata[field] = None
+    return metadata
+
+
+# Fetch metadata and save PDB/CIF/FASTA files
 def fetch_structure_data(pdb_id, save_dir=SAVE_DIR):
     print(f"Processing PDB ID: {pdb_id}")
     structure_info = {
         "PDB_ID": pdb_id,
-        "Resolution": "N/A",
         "PDB_File": None,
         "CIF_File": None,
         "FASTA_File": None,
+        "Metadata_File": None,
     }
 
-    # Fetch resolution and metadata
-    response = requests.get(SUMMARY_API.format(pdb_id=pdb_id))
-    if response.status_code == 200:
-        data = response.json()
-        structure_info["Resolution"] = data.get("rcsb_entry_info", {}).get(
-            "resolution_combined", ["N/A"]
-        )[0]
+    # Fetch metadata and store it in json, do not parse
+    metadata_path = os.path.join(save_dir, f"{pdb_id}_metadata.json")
+    if download_and_save(SUMMARY_API.format(pdb_id=pdb_id), metadata_path):
+        structure_info["Metadata_File"] = metadata_path
+    # Extract specified metadata fields
+    metadata = get_metadata_fields(metadata_path, extra_metadata_fields)
+    structure_info.update(metadata)
 
     # Download PDB file
     pdb_file_path = os.path.join(save_dir, f"{pdb_id}.pdb")
@@ -122,35 +175,66 @@ def fetch_structure_data(pdb_id, save_dir=SAVE_DIR):
 
 
 # Helper function to download and save files
-def download_and_save(url, file_path):
+def download_and_save(url, file_path, force=False):
+    if Path(file_path).exists() and not force:
+        print(f"File '{file_path}' already exists. Skipping download.")
+        return True
     try:
         response = requests.get(url)
-        if response.status_code == 200:
-            with open(file_path, "wb") as file:
-                file.write(response.content)
-            return True
-        else:
-            print(f"Failed to download {url}")
-            return False
-    except Exception as e:
-        print(f"Error downloading {url}: {e}")
+        response.raise_for_status()
+        with open(file_path, "wb") as file:
+            file.write(response.content)
+        return True
+    except requests.exceptions.RequestException as err:
+        print(f"Failed to download '{url}': {err}")
         return False
 
 
 # Main execution
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="Fetch RNA structures from PDB")
-    parser.add_argument("--start_date", type=str, default="now-1w", help="Start date for search (e.g., 'now-1w')")
-    parser.add_argument("--stop_date", type=str, default="now", help="Stop date for search (e.g., 'now')")
-    parser.add_argument("--search_type", type=str, choices=SEARCH_QUERIES.keys(), default="polymer_type", help="Type of search query")
-    parser.add_argument("--search_term", type=str, default="RNA", help="Term to search for")
-    parser.add_argument("--output_dir", type=str, default=SAVE_DIR, help="Directory to save downloaded files")
+    parser.add_argument(
+        "--start_date",
+        type=str,
+        default="now-1w",
+        help="Start date for search (e.g., 'now-1w')",
+    )
+    parser.add_argument(
+        "--stop_date",
+        type=str,
+        default="now",
+        help="Stop date for search (e.g., 'now')",
+    )
+    parser.add_argument(
+        "--search_type",
+        type=str,
+        choices=SEARCH_QUERIES.keys(),
+        default="polymer_type",
+        help="Type of search query",
+    )
+    parser.add_argument(
+        "--search_term", type=str, default="RNA", help="Term to search for"
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default=SAVE_DIR,
+        help="Directory to save downloaded files",
+    )
     args = parser.parse_args()
 
-    print(f"Searching for RNA structures released from {args.start_date} to {args.stop_date}...")
+    print(
+        f"Searching for RNA structures released from {args.start_date} to {args.stop_date}..."
+    )
     print(f"Using search type: {args.search_type}")
-    rna_pdb_ids = search_rna_structures(start_date=args.start_date, stop_date=args.stop_date, search_type=args.search_type, search_term=args.search_term)
+    rna_pdb_ids = search_rna_structures(
+        start_date=args.start_date,
+        stop_date=args.stop_date,
+        search_type=args.search_type,
+        search_term=args.search_term,
+    )
     print(f"Found {len(rna_pdb_ids)} RNA structures.")
     # exit()
     print("Fetching structure data using multiprocessing...")
