@@ -4,8 +4,6 @@ from Bio.SeqRecord import SeqRecord
 from Bio.SeqIO import write
 import os
 from glob import glob
-from multiprocessing import Pool
-from tqdm import tqdm
 import numpy as np
 
 def split_cif_by_chains(input_cif, output_dir):
@@ -20,13 +18,12 @@ def split_cif_by_chains(input_cif, output_dir):
     Returns:
         list: Paths to the generated CIF and FASTA files.
     """
-    # Ensure the output directory exists
-    os.makedirs(output_dir, exist_ok=True)
 
     # Map of modified nucleotides to their unmodified counterparts
     #modified_to_unmodified =  
     # Manually curated mapping of noncanonical residue names to RNA.
     # TODO: Consider assigning based on ability to pair
+    # TODO: review based on parent nucleotide mapping from NKDB; https://nakb.org/modifiednt.html
     modified_to_unmodified = {   'A'  :'  A',   'C':'  C',   'G':'  G',   'U':'  U',\
                     '5BU':'  U', 'OMC':'  C', '5MC':'  C', 'CCC':'  C', ' DC':'  C', \
                     'CBR':'  C', 'CBV':'  C', 'CB2':'  C', '2MG':'  G', \
@@ -60,7 +57,7 @@ def split_cif_by_chains(input_cif, output_dir):
     structure = parser.get_structure("structure", input_cif)
 
     output_files = []
-    ID = input_cif.split('/')[-1].split('.')[0]
+    ID = input_cif.name.split(".")[0]  # to take care of .cif.gz too
 
     for model in structure:
         for chain in model:
@@ -139,22 +136,30 @@ def split_cif_by_chains(input_cif, output_dir):
 
     return output_files
 
-def process_cif_file(input_cif):
-    output_dir = "split_chains"
-    return split_cif_by_chains(input_cif, output_dir)
-
 if __name__ == "__main__":
-    input_dir = "rna_structures/"
-    output_dir = "split_chains"
-    cif_files = glob(f"{input_dir}/*.cif")
-    #cif_files = glob(f"{input_dir}/4E8K*.cif")
+    import argparse
+    from functools import partial
+    from pathlib import Path
+    from utils import parallel_process
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "input_dir", type=str, help="Path to the directory with mmCIF files to check"
+    )
+    parser.add_argument(
+        "output_dir",
+        type=str,
+        help="Path to the directory where filtered files will be saved (symlinked)",
+    )
+    args = parser.parse_args()
+    input_dir = Path(args.input_dir)
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    cif_files = list(input_dir.glob("*.cif"))
     # Use multiprocessing to process CIF files in parallel
-    cpu_count = os.cpu_count()
-    print(f"Processing {len(cif_files)} CIF files using {cpu_count} processes...")
-    with Pool(cpu_count) as pool:
-        results = list(tqdm(pool.imap(process_cif_file, cif_files), total=len(cif_files), desc="Processing CIF files"))
-
-    # Flatten the list of results
-    output_files = [file for sublist in results for file in sublist]
-    #print("Generated files:", output_files)
+    parallel_process(
+        partial(split_cif_by_chains, output_dir=output_dir),
+        cif_files,
+        desc="Splitting CIF files by chains",
+    )

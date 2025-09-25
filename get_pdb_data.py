@@ -1,13 +1,9 @@
 from pathlib import Path
 import requests
 import json
-import jsonpath_ng
-from multiprocessing import Pool, cpu_count
 import os
-
-# Directory to save the PDB, CIF, and FASTA files
-SAVE_DIR = "rna_structures"
-os.makedirs(SAVE_DIR, exist_ok=True)
+from functools import partial
+from utils import parallel_process
 
 # Base URLs for RCSB PDB APIs
 SEARCH_API = "https://search.rcsb.org/rcsbsearch/v2/query"
@@ -138,7 +134,7 @@ def get_metadata_fields(metadata_file, metadata_fields):
 
 
 # Fetch metadata and save PDB/CIF/FASTA files
-def fetch_structure_data(pdb_id, save_dir=SAVE_DIR):
+def fetch_structure_data(pdb_id, output_dir):
     print(f"Processing PDB ID: {pdb_id}")
     structure_info = {
         "PDB_ID": pdb_id,
@@ -149,7 +145,7 @@ def fetch_structure_data(pdb_id, save_dir=SAVE_DIR):
     }
 
     # Fetch metadata and store it in json, do not parse
-    metadata_path = os.path.join(save_dir, f"{pdb_id}_metadata.json")
+    metadata_path = os.path.join(output_dir, f"{pdb_id}_metadata.json")
     if download_and_save(SUMMARY_API.format(pdb_id=pdb_id), metadata_path):
         structure_info["Metadata_File"] = metadata_path
     # Extract specified metadata fields
@@ -157,17 +153,17 @@ def fetch_structure_data(pdb_id, save_dir=SAVE_DIR):
     structure_info.update(metadata)
 
     # Download PDB file
-    pdb_file_path = os.path.join(save_dir, f"{pdb_id}.pdb")
+    pdb_file_path = os.path.join(output_dir, f"{pdb_id}.pdb")
     if download_and_save(DOWNLOAD_PDB.format(pdb_id=pdb_id), pdb_file_path):
         structure_info["PDB_File"] = pdb_file_path
 
     # Download CIF file
-    cif_file_path = os.path.join(save_dir, f"{pdb_id}.cif")
+    cif_file_path = os.path.join(output_dir, f"{pdb_id}.cif")
     if download_and_save(DOWNLOAD_CIF.format(pdb_id=pdb_id), cif_file_path):
         structure_info["CIF_File"] = cif_file_path
 
     # Download FASTA file
-    fasta_file_path = os.path.join(save_dir, f"{pdb_id}.fasta")
+    fasta_file_path = os.path.join(output_dir, f"{pdb_id}.fasta")
     if download_and_save(DOWNLOAD_FASTA.format(pdb_id=pdb_id), fasta_file_path):
         structure_info["FASTA_File"] = fasta_file_path
 
@@ -220,7 +216,7 @@ def main():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default=SAVE_DIR,
+        default="rna_structures_all",
         help="Directory to save downloaded files",
     )
     args = parser.parse_args()
@@ -236,10 +232,15 @@ def main():
         search_term=args.search_term,
     )
     print(f"Found {len(rna_pdb_ids)} RNA structures.")
-    # exit()
+    if len(rna_pdb_ids) > 0:
+        os.makedirs(args.output_dir, exist_ok=True)
+
     print("Fetching structure data using multiprocessing...")
-    with Pool(cpu_count()) as pool:
-        structure_data = pool.map(fetch_structure_data, rna_pdb_ids)
+    structure_data = parallel_process(
+        partial(fetch_structure_data, output_dir=args.output_dir),
+        rna_pdb_ids,
+        desc="Fetching structure data",
+    )
 
     # Save metadata to JSON file
     metadata_file = os.path.join(args.output_dir, "rna_structures_metadata.json")
