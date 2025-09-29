@@ -6,7 +6,7 @@ from Bio.PDB.MMCIF2Dict import MMCIF2Dict
 from collections import defaultdict
 import pandas as pd
 from utils import *
-
+from rna_reference import rna_atom_groups
 cif_files = glob("./split_chains/*.cif")
 # len(cif_files)
 
@@ -49,63 +49,6 @@ def get_sequence(file):
         sequence = "".join(line.strip() for line in file)
 
     return sequence
-
-
-# rna_atom_groups = {
-#     "A": {
-#         "phosphate": ["P", "OP1", "OP2", "O5'","O3'"],
-#         "sugar_ring": ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'"],
-#         "base": ["N9", "N1", "C2", "N3", "C4", "C5", "C6", "N7", "C8", "N6"]
-#     },
-#     "U": {
-#         "phosphate": ["P", "OP1", "OP2", "O5'","O3'"],
-#         "sugar_ring": ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'"],
-#         "base": ["N1", "C2", "O2", "N3", "C4", "O4", "C5", "C6"]
-#     },
-#     "G": {
-#         "phosphate": ["P", "OP1", "OP2", "O5'","O3'"],
-#         "sugar_ring": ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'"],
-#         "base": ["N9", "N1", "C2", "N2", "N3", "C4", "C5", "C6", "O6", "N7", "C8", ]
-#     },
-#     "C": {
-#         "phosphate": ["P", "OP1", "OP2", "O5'","O3'"],
-#         "sugar_ring": ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'"],
-#         "base": ["N1", "C2", "O2", "N3", "C4", "N4", "C5", "C6"]
-#     },
-#     "N": {
-#         "phosphate": ["P", "OP1", "OP2", "O5'","O3'"],
-#         "sugar_ring": ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'"],
-#         "base": ["N1", "C2", "O2", "N3", "C4", "N4", "C5", "C6"]
-#     }
-# }
-
-phosphate = ["P", "OP1", "OP2", "OP3"]  # OP3 will be missing in polymers
-sugar = ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'", "O5'", "O2'", "O3'"]
-
-# fmt: off
-rna_atom_groups = {
-    "A": {
-        "all": phosphate + sugar + \
-               ["N9", "N1", "C2", "N3", "C4", "C5", "C6", "N7", "C8", "N6"]
-    },
-    "U": {
-        "all": phosphate + sugar + \
-               ["N1", "C2", "O2", "N3", "C4", "O4", "C5", "C6"]
-    },
-    "G": {
-        "all": phosphate + sugar + \
-               ["N9", "N1", "C2", "N2", "N3", "C4", "C5", "C6", "O6", "N7", "C8", ]
-    },
-    "C": {
-        "all": phosphate + sugar + \
-                ["N1", "C2", "O2", "N3", "C4", "N4", "C5", "C6"]
-    },
-    "N": {
-        "all": phosphate + sugar 
-    }
-}
-# fmt: on
-
 
 def get_xyz_sequence(file):
     pdb_info = MMCIF2Dict(file)
