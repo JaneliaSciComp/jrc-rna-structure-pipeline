@@ -97,6 +97,6 @@ def parallel_process(
     """Utility function to parallelize processing using multiprocessing. With progress bar."""
     l = len(data_list)
     print(f"Processing {l} items using {num_processes} processes...")
-    with mp.Pool(processes=num_processes) as pool:
+    with mp.Pool(processes=min(num_processes, l)) as pool:
         results = list(tqdm(pool.imap(function, data_list), total=l, desc=desc))
     return results
