@@ -1,27 +1,7 @@
-from glob import glob
-from tqdm import tqdm
 import numpy as np
-import pandas as pd
 from Bio.PDB.MMCIF2Dict import MMCIF2Dict
 from collections import defaultdict
-import pandas as pd
-from utils import *
 from rna_reference import rna_atom_groups
-cif_files = glob("./split_chains/*.cif")
-# len(cif_files)
-
-# stats=pd.read_csv("extracted_structures.csv")
-# stats=stats.set_index('cif')
-
-# structure_cutoff=0.1
-
-# filtered_cif_files=[f for f in cif_files if f in stats.index and stats.loc[f,'structuredness']>structure_cutoff]
-
-filtered_cif_files = cif_files
-# print("after filtering by structuredness there are:", len(filtered_cif_files))
-# print(len(filtered_cif_files))
-
-# exit()
 
 
 def get_nan_vector():
@@ -33,12 +13,9 @@ def get_nan_vector():
     return nan_vector
 
 
-from Bio import SeqIO
-
-
 def get_sequence(file):
     # Step 2: Replace "RNAsolo_member_cif" with "solo_member_fasta"
-    modified_string = file.replace(".cif", ".fasta")
+    modified_string = file.with_suffix(".fasta")
 
     # Read the raw sequence
     with open(modified_string, "r") as file:
@@ -50,7 +27,8 @@ def get_sequence(file):
 
     return sequence
 
-def get_xyz_sequence(file):
+
+def get_xyz_sequence(file, id_source="label"):
     pdb_info = MMCIF2Dict(file)
 
     xyz = [
@@ -62,22 +40,27 @@ def get_xyz_sequence(file):
     xyz = np.array(xyz, dtype="float32").T
 
     seq_id = np.array(
-        [float(x) if x != "." else np.nan for x in pdb_info["_atom_site.label_seq_id"]],
+        [
+            float(x) if x != "." else np.nan
+            for x in pdb_info[f"_atom_site.{id_source}_seq_id"]
+        ],
         dtype="float32",
     )
     atom_id = np.array(pdb_info["_atom_site.label_atom_id"])
     res_id = np.array(pdb_info["_atom_site.label_comp_id"])
-
     unique_seq_id = np.unique(seq_id[seq_id == seq_id]).astype("int")
     sequence_res = get_sequence(file)
-    sequence_complete = ["N"] * int(unique_seq_id.max().item())
 
-    if len(unique_seq_id) != len(sequence_res):  # skip some special cases like HEATOM
-        return None, None, None
+    # The fasta file is authoritative source for the sequence
+    # use it to fill in any gaps in seq_id numbering
 
-    for i, nt in zip(unique_seq_id, sequence_res):
-        if i > 0:
-            sequence_complete[i - 1] = nt
+    # Assumes that the numbering is consistent with the fasta sequence
+    # If files are processed by Biopython MMCIFParser with auth_residues=False
+    # then the matching numbering should be in auth_seq_id instead of label_seq_id
+    # If files come from PDB then label_seq_id should be consistent with the sequence in _entity_poly (and fasta)
+
+    # The input files also should have all hetatm removed
+    sequence_complete = sequence_res
 
     grouped_xyz = []
 
@@ -128,51 +111,66 @@ def get_xyz_sequence(file):
 #     get_xyz_sequence(file)
 
 
-from multiprocessing import Pool, cpu_count
-from functools import partial
-from tqdm import tqdm
-import pickle
-
-
 # Function to wrap `get_xyz_sequence` for multiprocessing
-def process_file(file):
+def process_file(file, id_source="label"):
     try:
-        return get_xyz_sequence(file)
+        return get_xyz_sequence(file, id_source=id_source)
     except Exception as e:
         print(f"Error processing {file}: {e}")
         return None, None
 
 
-# if __name__ == "__main__":
-# Use all available CPU cores
-num_cores = cpu_count()
+if __name__ == "__main__":
+    import argparse
+    from pathlib import Path
+    from utils import parallel_process
+    from functools import partial
+    import pickle
 
-print(f"Using {num_cores} cores for multiprocessing")
-
-# Initialize the pool of workers
-with Pool(num_cores) as pool:
-    # Use tqdm to track progress
-    results = list(
-        tqdm(pool.imap(process_file, filtered_cif_files), total=len(filtered_cif_files))
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "input_dir", type=str, help="Path to the directory with mmCIF files to process"
+    )
+    parser.add_argument(
+        "output_file", type=str, help="Save results to this pickle file"
+    )
+    parser.add_argument(
+        "--id-source",
+        type=str,
+        default="label",
+        choices=["label", "auth"],
+        help="Source of sequence IDs in mmCIF file (label or auth)",
     )
 
-data_xyz = []
-data_sequence = []
-data_cif_files = []
-# Separate results into sequences and coordinates
-for result in results:
-    if len(result) == 3:
-        sequence, grouped_xyz, f = result
-        if sequence is not None and grouped_xyz is not None:
-            data_sequence.append(sequence)
-            data_xyz.append(grouped_xyz)
-            data_cif_files.append(f)
+    args = parser.parse_args()
+    id_source = args.id_source
 
-print(f"Processed {len(data_sequence)} sequences and their coordinates.")
+    cif_files = list(Path(f"{args.input_dir}").glob("*.cif"))
 
-# Save results as a pickle dict
-with open("raw_pdb_xyz_data.pkl", "wb+") as f:
-    pickle.dump(
-        {"sequence": data_sequence, "xyz": data_xyz, "data_cif_files": data_cif_files},
-        f,
-    )
+    process_file_partial = partial(process_file, id_source=id_source)
+    results = parallel_process(process_file_partial, cif_files)
+
+    data_xyz = []
+    data_sequence = []
+    data_cif_files = []
+    # Separate results into sequences and coordinates
+    for result in results:
+        if len(result) == 3:
+            sequence, grouped_xyz, f = result
+            if sequence is not None and grouped_xyz is not None:
+                data_sequence.append(sequence)
+                data_xyz.append(grouped_xyz)
+                data_cif_files.append(str(f))
+
+    print(f"Processed {len(data_sequence)} sequences and their coordinates.")
+
+    # Save results as a pickle dict
+    with open(args.output_file, "wb+") as f:
+        pickle.dump(
+            {
+                "sequence": data_sequence,
+                "xyz": data_xyz,
+                "data_cif_files": data_cif_files,
+            },
+            f,
+        )
