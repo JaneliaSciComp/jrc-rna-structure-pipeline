@@ -33,7 +33,7 @@ def to_wide(result_solution, fill_coordinates=None, select=None):
     result_solution_selected = result_solution[keep + list(selected_columns)]
 
     result_solution_selected = result_solution_selected.set_index(keep).unstack(
-        "solution_id", sort=False
+        "solution_id"
     )
     result_solution_selected = result_solution_selected.sort_index(level=[1, 0], axis=1)
     # Fill missing coordinates if requested
