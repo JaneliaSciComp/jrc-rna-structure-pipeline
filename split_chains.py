@@ -76,7 +76,6 @@ def split_cif_by_chains(input_cif, output_dir):
             to_delete=[]
             for residue in chain.get_residues():
                 # Get the single code based on the resid
-                print(residue.id, residue.resname)
                 single_code = current_sequence[residue.id[1] - 1]
                 if single_code == "X":
                     # Modified residue with unknown parent, try to map
@@ -168,6 +167,7 @@ def split_cif_by_chains(input_cif, output_dir):
                 with open(fasta_output_path, "w") as fasta_file:
                     write(seq_record, fasta_file, "fasta")
                 output_files.append(fasta_output_path)
+                # TODO: verify that this sequence matches the one in downloaded FASTA file
 
     return output_files
 

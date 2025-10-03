@@ -57,6 +57,7 @@ def filter(mmcif_file, threshold=0.5):
 if __name__ == "__main__":
     from utils import parallel_process
     import argparse
+    from functools import partial
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -76,7 +77,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--extra_extensions",
         nargs="+",
-        default=[".fasta", ".pdb", ".json"],
+        default=[".fasta", ".pdb", ".metadata.json"],
         help="Extra file extensions to look for when copying files",
     )
 
@@ -86,7 +87,7 @@ if __name__ == "__main__":
         "*.cif"
     )  # List all mmCIF files in the directory and subdirectories
     file_list = list(file_list)
-    keep = parallel_process(filter, file_list)
+    keep = parallel_process(partial(filter, threshold=args.threshold), file_list)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Keeping {sum(keep)} out of {len(keep)} files")

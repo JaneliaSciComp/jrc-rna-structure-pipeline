@@ -1,4 +1,5 @@
 import pickle
+import json
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
@@ -35,9 +36,13 @@ def process_entry(pdb_id, data, i):
     return train_data
 
 
-def process_all(input_file, keep_per_group=5):
+def process_all(input_file, metadata_file, keep_per_group=5):
     with open(input_file, "rb") as f:
         data = pickle.load(f)
+
+    with open(metadata_file, "rb") as f:
+        metadata = json.load(f)
+        metadata = {entry["PDB_ID"]: entry for entry in metadata}
 
     train_solution = []
     train_sequences = []
@@ -46,18 +51,33 @@ def process_all(input_file, keep_per_group=5):
         L = min(keep_per_group, L)
 
     for i in range(L):
-        pdb_id = data["pdb_ids"][i]
-        train_data = process_entry(pdb_id, data, i)
+        pdb_chain_id = data["pdb_ids"][i]
+        train_data = process_entry(pdb_chain_id, data, i)
         train_data["solution_id"] = i + 1
-        train_data["pdb_chain_id"] = pdb_id
+        train_data["pdb_chain_id"] = pdb_chain_id
         train_solution.append(train_data)
+
+        # Get data from metadata file and merge
+        pdb_id = pdb_chain_id.split("_")[0]
+        if pdb_id in metadata:
+            release_date = metadata[pdb_id].get("Release", "")
+            description = metadata[pdb_id].get("Description", "")
+            sequence_file = metadata[pdb_id].get("FASTA_File", "")
+
+            all_sequences = open(sequence_file).read().strip() if sequence_file else ""
+        else:
+            print(f"Warning: {pdb_id} not found in metadata")
+            release_date = ""
+            description = ""
+            all_sequences = ""
+
         train_sequences.append(
             {
-                "target_id": pdb_id,
+                "target_id": pdb_chain_id,
                 "sequence": data["sequence"][i],
-                # "temporal_cutoff": realease_date,
-                # "description": description,
-                # "all_sequences": all_sequences,
+                "temporal_cutoff": release_date,
+                "description": description,
+                "all_sequences": all_sequences,
             }
         )
 
@@ -87,6 +107,13 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--metadata-file",
+        required=True,
+        type=str,
+        help="JSON file with metadata for all PDB IDs",
+    )
+
+    parser.add_argument(
         "--keep", type=int, default=5, help="Keep this many sequences per group"
     )
     parser.add_argument(
@@ -101,9 +128,11 @@ if __name__ == "__main__":
     result_sequences = pd.DataFrame()
     group_list = list(input_dir.glob("*_grouped.pkl"))
     print(f"Processing {len(group_list)} groups from {input_dir}")
-    for group in tqdm(group_list):
-        train_solution, train_sequences = process_all(group, keep_per_group=args.keep)
-        group_id = group.stem.replace("_grouped", "")
+    for group_file in tqdm(group_list):
+        train_solution, train_sequences = process_all(
+            group_file, metadata_file=args.metadata_file, keep_per_group=args.keep
+        )
+        group_id = group_file.stem.replace("_grouped", "")
         train_solution["group_id"] = group_id
         train_sequences["group_id"] = group_id
         result_solution = pd.concat([result_solution, train_solution])
