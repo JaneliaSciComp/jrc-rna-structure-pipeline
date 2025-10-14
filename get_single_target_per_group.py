@@ -46,7 +46,7 @@ if __name__ == "__main__":
         nargs=2,
         action="append",
         metavar=("old_name", "new_name"),
-        help="Rename columns after processing",
+        help="Rename columns after processing, applied in order",
     )
 
     args = parser.parse_args()
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     merge = args.merge if args.merge else []
     for col in targets.columns:
         if col in merge:
-            targets[col] = targets[col].apply(lambda x: "; ".join(map(str, x)))
+            targets[col] = targets[col].apply(lambda x: ";".join(map(str, x)))
         else:
             targets[col] = targets[col].apply(lambda x: x[0] if len(x) > 0 else None)
 
@@ -72,10 +72,12 @@ if __name__ == "__main__":
         targets = targets.drop(columns=args.drop)
 
     if args.rename:
-        rename_dict = {old: new for old, new in args.rename}
-        # drop exising columns to avoid conflicts
-        targets = targets.drop(columns=rename_dict.values(), errors="ignore")
-        targets = targets.rename(columns=rename_dict)
+        # Do the sequential rename instead of one shot to avoid conflicts, renames are applied in order
+        for old_name, new_name in args.rename:
+            print(f"Renaming column: {old_name} -> {new_name}")
+            # drop exising columns to avoid conflicts
+            targets = targets.drop(columns=[new_name], errors="ignore")
+            targets = targets.rename(columns={old_name: new_name})
 
     targets.to_csv(
         output_file,

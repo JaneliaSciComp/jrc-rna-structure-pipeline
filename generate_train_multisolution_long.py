@@ -83,6 +83,9 @@ def process_all(input_file, metadata_file, keep_per_group=5):
 
     train_solution = pd.concat(train_solution, ignore_index=True)
     train_sequences = pd.DataFrame(train_sequences)
+    train_sequences["temporal_cutoff"] = pd.to_datetime(
+        train_sequences["temporal_cutoff"]
+    ).dt.strftime("%Y-%m-%d")
     return train_solution, train_sequences
 
 

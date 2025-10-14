@@ -17,16 +17,18 @@ def get_composition(mmcif_file):
 
     # Get entities in the structure
     entity_ids = cif_dict.get("_entity.id", [])
-    entity_formula = cif_dict.get("_entity.formula_weight", [])
+    entity_formula_weight = cif_dict.get("_entity.formula_weight", [])
     entity_pdbx_number_of_molecules = cif_dict.get(
         "_entity.pdbx_number_of_molecules", []
     )
-    mass_by_id = {
-        k: float(weight) * int(copies)
-        for k, weight, copies in zip(
-            entity_ids, entity_formula, entity_pdbx_number_of_molecules
-        )
-    }
+    mass_by_id = {}
+    for k, weight, copies in zip(
+        entity_ids, entity_formula_weight, entity_pdbx_number_of_molecules
+    ):
+        if weight == "?" or copies == "?":
+            raise ValueError(f"Missing weight or copies for entity {k} in {mmcif_file}")
+        mass_by_id[k] = float(weight) * int(copies)
+
     # Get entity polymer types and number of residues
     entity_poly_entity_ids = cif_dict.get("_entity_poly.entity_id", [])
     entity_poly_types = cif_dict.get("_entity_poly.type", [])
@@ -42,8 +44,11 @@ def get_composition(mmcif_file):
 
 def filter(mmcif_file, threshold=0.5):
     """Checks if mass of the RNA component is at least `threshold` fraction of total mass."""
-
-    composition_by_type = get_composition(mmcif_file)
+    try:
+        composition_by_type = get_composition(mmcif_file)
+    except ValueError as e:
+        print(f"Warning: {e}, rejecting {mmcif_file}")
+        return False
     # Allowed keywords https://mmcif.wwpdb.org/dictionaries/mmcif_std.dic/Items/_entity_poly.type.html
     rna_mass = composition_by_type.get("polyribonucleotide", 0.0)
     total_mass = sum(composition_by_type.values())
@@ -87,7 +92,11 @@ if __name__ == "__main__":
         "*.cif"
     )  # List all mmCIF files in the directory and subdirectories
     file_list = list(file_list)
-    keep = parallel_process(partial(filter, threshold=args.threshold), file_list)
+    keep = parallel_process(
+        partial(filter, threshold=args.threshold),
+        file_list,
+        desc="Filtering by composition",
+    )
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Keeping {sum(keep)} out of {len(keep)} files")

@@ -3,6 +3,7 @@ import requests
 import json
 import os
 from functools import partial
+from retryhttp import retry
 from utils import parallel_process
 
 # Base URLs for RCSB PDB APIs
@@ -145,7 +146,7 @@ def fetch_structure_data(pdb_id, output_dir):
     }
 
     # Fetch metadata and store it in json, do not parse
-    metadata_path = os.path.join(output_dir, f"{pdb_id}_metadata.json")
+    metadata_path = os.path.join(output_dir, f"{pdb_id}.metadata.json")
     if download_and_save(SUMMARY_API.format(pdb_id=pdb_id), metadata_path):
         structure_info["Metadata_File"] = metadata_path
     # Extract specified metadata fields
@@ -169,9 +170,17 @@ def fetch_structure_data(pdb_id, output_dir):
 
     return structure_info
 
+def is_retryable_http_error(result):
+    if isinstance(result, requests.Response):
+        return result.status_code == 429  # Retry only on 429
+    return False
 
-# Helper function to download and save files
+# Helper function to download and save files,
+@retry
 def download_and_save(url, file_path, force=False):
+    """Download a file from a URL and save it locally. Skip if file exists unless force is True.
+
+    Retry if the download fails due to 429 Too Many Requests or other transient errors."""
     if Path(file_path).exists() and not force:
         print(f"File '{file_path}' already exists. Skipping download.")
         return True
@@ -239,6 +248,7 @@ def main():
     structure_data = parallel_process(
         partial(fetch_structure_data, output_dir=args.output_dir),
         rna_pdb_ids,
+        num_processes=4,  # Throttle to limit number of requests
         desc="Fetching structure data",
     )
 
