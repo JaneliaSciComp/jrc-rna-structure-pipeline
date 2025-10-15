@@ -117,6 +117,7 @@ def process_file(file, id_source="label"):
         return get_xyz_sequence(file, id_source=id_source)
     except Exception as e:
         print(f"Error processing {file}: {e}")
+        print(f"Dropping {file}; Reason: xyz_processing_error")
         return None, None
 
 
