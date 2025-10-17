@@ -18,7 +18,7 @@ if __name__ == "__main__":
         "--sort_by",
         nargs="+",
         type=str,
-        default=["temporal_cutoff"],
+        default=["temporal_cutoff, pdb_chain_id"],
         help="Columns to sort by before merging",
     )
     parser.add_argument(

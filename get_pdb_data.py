@@ -178,12 +178,19 @@ def fetch_structure_data(pdb_id, output_dir, cache_dir=None):
 
     return structure_info
 
-# Helper function to download and save files,
 @retry
+def download_url(url, destination):
+    """Retry if the download fails due to 429 Too Many Requests or other transient errors."""
+    response = requests.get(url)
+    response.raise_for_status()
+    with open(destination, "wb") as file:
+        file.write(response.content)
+
+
+# Helper function to download and save files,
 def download_and_save(url, file_path, cache_dir=None, force=False):
     """Download a file from a URL and save it locally. Skip if file exists unless force is True.
 
-    Retry if the download fails due to 429 Too Many Requests or other transient errors.
     """
     cache_dir = Path(cache_dir) if cache_dir else None
     file_path = Path(file_path)
@@ -206,14 +213,11 @@ def download_and_save(url, file_path, cache_dir=None, force=False):
             download = True
 
     if download:
+        print(f"Downloading '{url}' to '{destination}'...")
         try:
-            print(f"Downloading '{url}' to '{destination}'...")
-            response = requests.get(url)
-            response.raise_for_status()
-            with open(destination, "wb") as file:
-                file.write(response.content)
-        except requests.exceptions.RequestException as err:
-            print(f"Failed to download '{url}': {err}")
+            download_url(url, destination)
+        except requests.HTTPError as e:
+            print(f"Failed to download '{url}': {e}")
             return False
 
     if cache_dir:
@@ -284,7 +288,7 @@ def main():
             fetch_structure_data, output_dir=args.output_dir, cache_dir=args.cache_dir
         ),
         rna_pdb_ids,
-        num_processes=4,  # Throttle to limit number of requests
+        num_processes=12,  # Throttle to limit number of requests
         desc="Fetching structure data",
     )
 
