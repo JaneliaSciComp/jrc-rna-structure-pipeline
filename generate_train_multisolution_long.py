@@ -10,9 +10,13 @@ def process_entry(pdb_id, data, i):
     # realease_date=data['publication_date'][i]
     # description=aligned_sequences[i]['description']
     # all_sequences=aligned_sequences[i]['all_sequences']
-
-    sequence = data["sequence"][i]
+    print(f"Processing entry {pdb_id}")
+    # sequence = data["sequence"][i]
+    print("Using reference sequence for coordinate mapping")
+    sequence = data["ref_sequence"]
     xyz = [{} for _ in range(len(sequence))]
+    print(f"Sequence length: {len(sequence)}")
+    print(f"Number of residue coordinates: {len(data['xyz'][i])}")
     for j in range(len(sequence)):
         xyz[j] = data["xyz"][i][j]["all"]
 
@@ -78,6 +82,7 @@ def process_all(input_file, metadata_file, keep_per_group=5):
                 "temporal_cutoff": release_date,
                 "description": description,
                 "all_sequences": all_sequences,
+                "ref_sequence": data["ref_sequence"],
             }
         )
 
@@ -142,7 +147,7 @@ if __name__ == "__main__":
         result_sequences = pd.concat([result_sequences, train_sequences])
 
     result_solution.to_csv(
-        f"{output_file_prefix}_multisolution_allatom_long.csv",
+        f"{output_file_prefix}_allatom.csv",
         float_format="%.3f",
         index=False,
     )
