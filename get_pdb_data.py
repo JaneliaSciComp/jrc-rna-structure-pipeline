@@ -64,6 +64,16 @@ def search_rna_structures(
                         "value": f"{stop_date}",
                     },
                 },
+                {
+                    "type": "terminal",
+                    "service": "text",
+                    "parameters": {
+                        "attribute": "rcsb_entry_info.experimental_method",
+                        "operator": "exact_match",
+                        "negation": True,
+                        "value": "Integrative",
+                    },
+                },
                 SEARCH_QUERIES[search_type],
             ],
         },
@@ -178,6 +188,7 @@ def fetch_structure_data(pdb_id, output_dir, cache_dir=None):
 
     return structure_info
 
+
 @retry
 def download_url(url, destination):
     """Retry if the download fails due to 429 Too Many Requests or other transient errors."""
@@ -189,9 +200,7 @@ def download_url(url, destination):
 
 # Helper function to download and save files,
 def download_and_save(url, file_path, cache_dir=None, force=False):
-    """Download a file from a URL and save it locally. Skip if file exists unless force is True.
-
-    """
+    """Download a file from a URL and save it locally. Skip if file exists unless force is True."""
     cache_dir = Path(cache_dir) if cache_dir else None
     file_path = Path(file_path)
 
@@ -225,6 +234,7 @@ def download_and_save(url, file_path, cache_dir=None, force=False):
         print(f"Symlink '{cache_path}' to '{file_path}' from cache.")
         relative_symlink(cache_path, file_path)
     return True
+
 
 # Main execution
 def main():

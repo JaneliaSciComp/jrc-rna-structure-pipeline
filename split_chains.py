@@ -10,8 +10,11 @@ import numpy as np
 import re
 from rna_reference import modified_to_unmodified_nakb
 
+def drop_chains(reason, ID, chain_ids):
+    for chain_id in chain_ids:
+        print(f"Dropping {ID}_{chain_id}; Reason: {reason}")
 
-def get_sequence_from_cif(cif_dict):
+def get_sequence_from_cif(cif_dict, ID):
     chain_to_sequence = {}
     # Get sequence from entity_poly
     entity_ids = cif_dict.get("_entity_poly.entity_id", [])
@@ -19,11 +22,12 @@ def get_sequence_from_cif(cif_dict):
     seqs = cif_dict.get("_entity_poly.pdbx_seq_one_letter_code_can", [])
     seqs_full = cif_dict.get("_entity_poly.pdbx_seq_one_letter_code", [])
 
-    strand_ids = cif_dict.get("_entity_poly.pdbx_strand_id", [])
+    strand_ids_list = cif_dict.get("_entity_poly.pdbx_strand_id", [])
     types = cif_dict.get("_entity_poly.type", [])
+    entity_issues = {}
 
     for entity_id, seq, seq_full, strand_ids, type in zip(
-        entity_ids, seqs, seqs_full, strand_ids, types
+        entity_ids, seqs, seqs_full, strand_ids_list, types
     ):
         print(f"Entity {entity_id} type {type} strand_ids {strand_ids} seq {seq}")
         if type != "polyribonucleotide":
@@ -36,26 +40,47 @@ def get_sequence_from_cif(cif_dict):
             print(f"Entity {entity_id} has unresolved modified residues.")
             # The seq_full has modified residue names in parantheses, e.g. A(5MC)UCG
             # Extract the residue names and map them using modified_to_unmodified_nakb
-
+            canonical_residues = list(seq)
             residues = re.findall(r"([A-Z]|\(.*?\))", seq_full)
             residues = [
                 res[1:-1] if res.startswith("(") and res.endswith(")") else res
                 for res in residues
             ]
+            if len(residues) != len(canonical_residues):
+                print(
+                    f"Warning: length mismatch between canonical seq and full seq for entity {entity_id}"
+                )
+                print(f"Canonical seq: {canonical_residues}")
+                print(f"Full residues: {residues}")
+                drop_chains("canonical_full_length_mismatch", ID, strand_ids)
+                continue
+
             # Map the residues to unmodified using nakb mapping
             # If not found in the mapping use 'A'
             seq_mapped = []
-            for res in residues:
-                if res in {"A", "U", "G", "C"}:
-                    seq_mapped.append(res)
+            for i, (res, res_can) in enumerate(zip(residues, canonical_residues)):
+                if res_can in {"A", "U", "G", "C"}:
+                    seq_mapped.append(res_can)
                 elif res in modified_to_unmodified_nakb:
                     print(
                         f"Mapping modified residue {res} to {modified_to_unmodified_nakb[res]} using NAKB data"
                     )
                     seq_mapped.append(modified_to_unmodified_nakb[res])
+                elif i == 0 or i == len(residues) - 1:
+                    print(f"Removing terminal modified residue {res}")
+                    seq_mapped.append("-")  # indicate terminal residue removed
                 else:
-                    print(f"Warning: residue {res} not in NAKB mapping")
-                    seq_mapped.append(res)
+                    print(
+                        f"Warning: residue {res} not in NAKB mapping, unlikely modified residue, mapping to 'X'"
+                    )
+                    seq_mapped.append("X")
+            # Verify that the mapped sequence has only A,U,G,C,X and -
+            if not set(seq_mapped).issubset({"A", "U", "G", "C", "X", "-"}):
+                print(
+                    f"Warning: unresolved residues in mapped sequence for entity {entity_id}: {set(seq_mapped)}"
+                )
+                drop_chains("unresolved_residues", ID, strand_ids)
+                continue
             seq = "".join(seq_mapped)
 
         for strand_id in strand_ids:
@@ -84,11 +109,11 @@ def split_cif_by_chains(input_cif, output_dir):
     print("Processing", input_cif)
     parser = MMCIFParser(QUIET=True, auth_residues=False)
     cif_dict = MMCIF2Dict(input_cif)
-    chain_to_sequence = get_sequence_from_cif(cif_dict)
+    ID = input_cif.name.split(".")[0]  # to take care of .cif.gz too
+    chain_to_sequence = get_sequence_from_cif(cif_dict, ID)
     structure = parser.get_structure("structure", input_cif)
 
     output_files = []
-    ID = input_cif.name.split(".")[0]  # to take care of .cif.gz too
 
     for model in structure:
         for chain in model:
@@ -108,14 +133,24 @@ def split_cif_by_chains(input_cif, output_dir):
             # use custom modified_to_unmodified to map to unmodified
 
             to_delete=[]
+            stop_processing_chain = False
             for residue in chain.get_residues():
                 # Get the single code based on the resid
                 single_code = current_sequence[residue.id[1] - 1]
                 # Should be A,U,G,C at this point
+                if single_code == "-":
+                    # Terminal modified residue removed
+                    to_delete.append(residue.id)
+                    output_sequence[residue.id[1] - 1] = ""
+                    continue
+
                 if single_code not in {"A", "U", "G", "C"}:
                     print(
                         f"Warning: residue {residue.resname} at position {residue.id[1]} in chain {chain.id} not mapped to standard base"
                     )
+                    drop_chains("unresolved_residue_in_chain", ID, [chain.id])
+                    stop_processing_chain = True
+                    break
                 # TODO: verify atom mappings
 
                 residue.resname = single_code
@@ -132,6 +167,9 @@ def split_cif_by_chains(input_cif, output_dir):
             # exit()
             #print(to_delete)
             # Remove unwanted residues
+            if stop_processing_chain:
+                continue
+
             for res_id in to_delete:
                 #print(chain.child_dict[res_id])
                 chain.detach_child(res_id)
@@ -141,7 +179,7 @@ def split_cif_by_chains(input_cif, output_dir):
             # FIXME: configurable minimum length 
             # continue if the chain has at least 10 residues left
             if len(chain.child_dict) < 10:
-                print(f"Dropping {ID}_{chain_id}; Reason: rna_chain_too_short")
+                print(f"Dropping {ID}_{chain.id}; Reason: rna_chain_too_short")
                 continue
 
             # Check if 0.5 or more of the residues an the chain are RNA
@@ -170,15 +208,17 @@ def split_cif_by_chains(input_cif, output_dir):
                 io.save(cif_output_path)
                 output_files.append(cif_output_path)
 
-                # Write the chain to a new PDB file
-                try:
-                    pdb_output_path = os.path.join(output_dir, f"{ID}_{chain_id}.pdb")
-                    pdb_io = PDBIO()
-                    pdb_io.set_structure(chain_structure)
-                    pdb_io.save(pdb_output_path)
-                    output_files.append(pdb_output_path)
-                except:
-                    pass
+                # # Write the chain to a new PDB file
+                # try:
+                #     pdb_output_path = os.path.join(output_dir, f"{ID}_{chain_id}.pdb")
+                #     pdb_io = PDBIO()
+                #     pdb_io.set_structure(chain_structure)
+                #     pdb_io.save(pdb_output_path)
+                #     output_files.append(pdb_output_path)
+                # except:
+                #     print(
+                #         f"Dropping PDB for {ID}_{chain_id}; Reason: pdb_conversion_failed"
+                #     )
 
                 # Use the modified sequence to a FASTA file
                 sequence = "".join(output_sequence)
@@ -189,7 +229,7 @@ def split_cif_by_chains(input_cif, output_dir):
                 output_files.append(fasta_output_path)
                 # TODO: verify that this sequence matches the one in downloaded FASTA file
             else:
-                print(f"Dropping {ID}_{chain_id}; Reason: rna_chain_fraction_below_0.5")
+                print(f"Dropping {ID}_{chain.id}; Reason: rna_chain_fraction_below_0.5")
 
     return output_files
 
