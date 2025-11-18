@@ -18,8 +18,8 @@ C1_index = rna_atom_groups["A"]["all"].index(
 )  # Index of C1' atom in the atom list
 
 
-def filter_condition(i):
-    xyz=data['xyz'][i]
+def filter_condition(idx):
+    xyz = data["xyz"][idx]
     
     for i in range(len(xyz)):
         if 'phosphate' in xyz[i]:
@@ -31,6 +31,9 @@ def filter_condition(i):
     #first filter if percent nan > 0.5
 
     if np.isnan(xyz).mean()>0.5:
+        print(
+            f"Dropping {data['data_cif_files'][idx]}; Reason: inter_C1_distance_filter due to too many NaNs"
+        )
         return False
 
     #second filter if 0.2 of nts have min inter C1 distance < 12
@@ -51,9 +54,10 @@ def filter_condition(i):
     if (min_distances<12).mean()>0.2:
         return True
     else:
-        print(f"Dropping {data['data_cif_files'][i]}; Reason: inter_C1_distance_filter")
+        print(
+            f"Dropping {data['data_cif_files'][idx]}; Reason: inter_C1_distance_filter"
+        )
         return False
-
 
 with mp.Pool(mp.cpu_count()) as pool:
     results = list(tqdm(pool.imap(filter_condition, range(len(data['xyz']))), total=len(data['xyz'])))
