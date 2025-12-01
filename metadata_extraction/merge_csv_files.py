@@ -68,7 +68,7 @@ def merge_csv_files(
 
     # Perform merge
     print(
-        f"\nMerging on {'column: ' + on if on else 'left: ' + str(left_on) + ', right: ' + str(right_on)}..."
+        f"\nMerging on {'column: ' + str(on) if on else 'left: ' + str(left_on) + ', right: ' + str(right_on)}..."
     )
     print(f"Merge type: {how}")
 
@@ -113,18 +113,18 @@ def merge_csv_files(
 
     if merge_key_left and merge_key_right:
         # Get unique keys from each file
-        left_keys = set(df_left[merge_key_left].dropna().unique())
-        right_keys = set(df_right[merge_key_right].dropna().unique())
+        left_keys = set(df_left[merge_key_left].dropna().drop_duplicates())
+        right_keys = set(df_right[merge_key_right].dropna().drop_duplicates())
         print("Unique keys in left file:", len(left_keys))
 
         print("Unique keys in right file:", len(right_keys))
         # List those keys that are not unique
         non_unique_left = df_left[merge_key_left][
             df_left[merge_key_left].duplicated()
-        ].unique()
+        ].drop_duplicates()
         non_unique_right = df_right[merge_key_right][
             df_right[merge_key_right].duplicated()
-        ].unique()
+        ].drop_duplicates()
         print("Non-unique keys in left file:", len(non_unique_left))
         print("Non-unique keys in right file:", len(non_unique_right))
 
@@ -211,7 +211,9 @@ Examples:
     # Merge column arguments
     merge_group = parser.add_argument_group("merge columns")
     merge_group.add_argument(
-        "--on", help="Column name to merge on (if same in both files)"
+        "--on",
+        help="Column names to merge on (if same in both files)",
+        nargs="+",
     )
     merge_group.add_argument(
         "--left-on", dest="left_on", help="Column name in left file to merge on"
