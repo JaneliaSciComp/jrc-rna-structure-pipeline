@@ -68,12 +68,22 @@ def get_message(
     )
     return msg_info
 
-def groupby_sequence(data, min_match_ratio=0.9):
+def collect_grouped_idx(sequences, min_match_ratio=0.9):
+    """
+    Collects grouped sequence IDs based on partial matching with a minimum match ratio.
+
+    Args:
+        sequences (list): A list of sequences to group.
+        min_match_ratio (float): Minimum ratio for partial matching.
+
+    Returns:
+        dict: A dictionary mapping reference IDs to grouped sequence IDs and their positions.
+    """
     grouped_ids = {}
     seq_to_id = PartialSequenceMapping(min_match_ratio=min_match_ratio)
     # Collect sequences and coordinates that group by partial matching
-    for i in range(len(data["sequence"])):
-        seq = data["sequence"][i]
+    for i in range(len(sequences)):
+        seq = sequences[i]
         try:
             matched_seq, position, ref_id = seq_to_id.get_match_item(seq)
         except KeyError:
@@ -168,7 +178,12 @@ def groupby_sequence(data, min_match_ratio=0.9):
                 )
             else:
                 assert False, "Unhandled case in partial sequence matching"
+    return grouped_ids, seq_to_id
 
+def groupby_sequence(data, min_match_ratio=0.9):
+    grouped_ids, seq_to_id = collect_grouped_idx(
+        data["sequences"], min_match_ratio=min_match_ratio
+    )
     # Now we have grouped_ids with groupings, need pad the cordinates to match the longest sequence in each group
     grouped_data = {}
     for ref_id, entries in grouped_ids.items():
