@@ -372,6 +372,9 @@ def extract_chain_metadata(block):
 
 
 if __name__ == "__main__":
+    import sys
+
+    sys.path.append(str(Path(__file__).parent.parent))
     from utils import parallel_process
     import argparse
 
@@ -435,9 +438,13 @@ if __name__ == "__main__":
                 file_list,
                 desc="Extracting metadata (biotite)",
             )
-            pd.concat([pd.DataFrame(r) for r in result], axis=0).set_index(
-                "pdb_id"
-            ).to_csv(args.output_file)
+            r = pd.concat([pd.DataFrame(r) for r in result], axis=0)
+            # Proper format
+            r["temporal_cutoff"] = pd.to_datetime(
+                r["temporal_cutoff"], errors="coerce"
+            ).dt.strftime("%Y-%m-%d")
+
+            r.set_index("pdb_id").to_csv(args.output_file, date_format="%Y-%m-%d")
         else:
             # Use Dask bag for parallel processing
             import dask.bag as db
@@ -453,7 +460,7 @@ if __name__ == "__main__":
             b.map(
                 partial(extract_all_metadata, keywords=args.keyword)
             ).flatten().to_dataframe().set_index("pdb_id").to_csv(
-                args.output_file
+                args.output_file, date_format="%Y-%m-%d"
             )  # , engine="pyarrow", compression="gzip")
 
     else:
@@ -463,7 +470,11 @@ if __name__ == "__main__":
             metadata = extract_all_metadata(cif_file, keywords=args.keyword)
             result = pd.concat([result, pd.DataFrame(metadata)], axis=0)
         result = result.set_index("pdb_id")
-        result.to_csv(args.output_file)
+        # Proper format
+        result["temporal_cutoff"] = pd.to_datetime(
+            result["temporal_cutoff"], errors="coerce"
+        ).dt.strftime("%Y-%m-%d")
+        result.to_csv(args.output_file, date_format="%Y-%m-%d")
 
     # print(f"Processing {len(file_list)} mmCIF files...")
     # print(args.keyword)

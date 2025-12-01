@@ -37,7 +37,7 @@ phosphate = ["P", "OP1", "OP2", "OP3"]  # OP3 will be missing in polymers
 sugar = ["C1'", "C2'", "C3'", "C4'", "O4'", "C5'", "O5'", "O2'", "O3'"]
 
 # Get reference from the NAKB modified nucleotide database
-DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR = Path(__file__).parent / ".." / "data"
 
 
 def _load_nakb_mapping():

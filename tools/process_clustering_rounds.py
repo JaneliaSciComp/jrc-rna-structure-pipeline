@@ -71,7 +71,7 @@ def load_initial_members(
     Returns:
         List of member IDs
     """
-    df = pd.read_csv(filepath)
+    df = pd.read_csv(filepath, keep_default_na=False)
     return (
         df[[member_column, cluster_column]]
         .dropna()

@@ -140,9 +140,9 @@ for min_seq_id in ${validated_identities[*]}; do
     # Run mmseqs easy-cluster
     # Set the k-mer size to 3 for min_seq_id higher than 0.8
     if (( $(awk -v i="${min_seq_id}" 'BEGIN { print (i > 0.8) }') )); then
-        command=(mmseqs easy-cluster "${current_input}" -k 3 --min-seq-id "${min_seq_id}" -c "${coverage_num}" --cov-mode 5 "${output}" "${tmpdir}")
+        command=(mmseqs easy-cluster "${current_input}" --dbtype 2 -k 3 --min-seq-id "${min_seq_id}" -c "${coverage_num}" --cov-mode 5 "${output}" "${tmpdir}")
     else
-        command=(mmseqs easy-cluster "${current_input}" -k 4 --min-seq-id "${min_seq_id}" -c "${coverage_num}" --cov-mode 5 "${output}" "${tmpdir}")
+        command=(mmseqs easy-cluster "${current_input}" --dbtype 2 -k 4 --min-seq-id "${min_seq_id}" -c "${coverage_num}" --cov-mode 5 "${output}" "${tmpdir}")
     fi
     echo command: "${command[@]}"
     if ! eval "${command[@]}"; then

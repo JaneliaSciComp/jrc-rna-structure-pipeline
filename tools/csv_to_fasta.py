@@ -40,7 +40,7 @@ def read_sequences(
         if not p.exists():
             raise FileNotFoundError(f"CSV file not found: {p}")
         try:
-            df = pd.read_csv(p)
+            df = pd.read_csv(p, keep_default_na=False)
         except Exception as e:
             raise RuntimeError(f"Failed to read CSV: {p}: {e}") from e
 

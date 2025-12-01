@@ -76,7 +76,7 @@ def process_csv_files(
         cluster_json (str | Path): Path to the cluster.json mapping file.
         output_csv (str | Path): Path to save the output CSV file.
     """
-    df = pd.read_csv(input_csv)
+    df = pd.read_csv(input_csv, keep_default_na=False)
     mapping_components, mapping_clusters = get_rna3ddb_mapping(cluster_json)
     df = assign_rna3ddb_mapping(
         df, mapping_components, output_column="rna3ddb_component_id"

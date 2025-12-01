@@ -57,12 +57,12 @@ def merge_csv_files(
 
     # Read CSV files
     print(f"Reading {left_file}...")
-    df_left = pd.read_csv(left_file)
+    df_left = pd.read_csv(left_file, keep_default_na=False)
     print(f"  Shape: {df_left.shape}")
     print(f"  Columns: {list(df_left.columns)}")
 
     print(f"\nReading {right_file}...")
-    df_right = pd.read_csv(right_file)
+    df_right = pd.read_csv(right_file, keep_default_na=False)
     print(f"  Shape: {df_right.shape}")
     print(f"  Columns: {list(df_right.columns)}")
 

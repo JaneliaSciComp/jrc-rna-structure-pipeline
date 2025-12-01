@@ -12,7 +12,7 @@ def get_rna3dhub_mapping(rna3dhub_csv: str | Path) -> pd.DataFrame:
     Returns:
         pd.DataFrame: DataFrame with added RNA3DHub mapping information.
     """
-    df = pd.read_csv(rna3dhub_csv)
+    df = pd.read_csv(rna3dhub_csv, keep_default_na=False)
     # data format
     # "NR_all_81027.2","9MME|1|k+9MME|1|o+9MME|1|s+9MME|1|w","9MME|1|k+9MME|1|o+9MME|1|s+9MME|1|w,9MME|1|U+9MME|1|Y+9MME|1|c+9MME|1|g"
     df.columns = ["rna3dhub_id", "representative", "members"]
@@ -59,7 +59,7 @@ def process_csv_files(
         rna3dhub_csv (str | Path): Path to the RNA3DHub CSV mapping file.
         output_csv (str | Path): Path to save the output CSV file.
     """
-    df = pd.read_csv(input_csv)
+    df = pd.read_csv(input_csv, keep_default_na=False)
     mapping = get_rna3dhub_mapping(rna3dhub_csv)
     df = assign_rna3dhub_mapping(df, mapping)
     df.to_csv(output_csv, index=False)
