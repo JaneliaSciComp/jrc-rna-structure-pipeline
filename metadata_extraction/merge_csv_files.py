@@ -113,8 +113,10 @@ def merge_csv_files(
 
     if merge_key_left and merge_key_right:
         # Get unique keys from each file
-        left_keys = set(df_left[merge_key_left].dropna().drop_duplicates())
-        right_keys = set(df_right[merge_key_right].dropna().drop_duplicates())
+        left_keys = set(df_left[merge_key_left].dropna().drop_duplicates().itertuples())
+        right_keys = set(
+            df_right[merge_key_right].dropna().drop_duplicates().itertuples()
+        )
         print("Unique keys in left file:", len(left_keys))
 
         print("Unique keys in right file:", len(right_keys))

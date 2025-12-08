@@ -17,9 +17,9 @@ def get_read_function(file_pattern: str) -> str:
 
     ext = Path(sample_file).suffix.lower()
     if ext == ".json":
-        return "read_json_auto"
+        return "read_json_auto", ""
     elif ext == ".csv":
-        return "read_csv_auto"
+        return "read_csv_auto", ", nullstr=nan"
     else:
         raise ValueError(f"Unsupported file extension: {ext}. Use .json or .csv")
 
@@ -48,13 +48,13 @@ def merge_sequences_and_metadata(
         conn = duckdb.connect(":memory:")
 
         # Determine read functions based on file extensions
-        seq_read_func = get_read_function(sequences_file)
-        meta_read_func = get_read_function(metadata_file)
+        seq_read_func, seq_options = get_read_function(sequences_file)
+        meta_read_func, meta_options = get_read_function(metadata_file)
 
         # Load sequences table
         conn.execute(f"""
             CREATE TABLE sequences AS
-            SELECT * FROM {seq_read_func}('{sequences_file}')
+            SELECT * FROM {seq_read_func}('{sequences_file}' {seq_options})
         """)
 
         # Check if pdb_id column exists and add it if needed
@@ -76,7 +76,7 @@ def merge_sequences_and_metadata(
         # Load metadata table
         conn.execute(f"""
             CREATE TABLE metadata AS
-            SELECT * FROM {meta_read_func}('{metadata_file}')
+            SELECT * FROM {meta_read_func}('{metadata_file}' {meta_options})
         """)
 
         # Build exclude clause
