@@ -6,6 +6,7 @@ def groupby_sequence_csv(
     input_csv: str,
     output_csv: str,
     min_match_ratio: float = 0.9,
+    group_output_name: str = "group_id",
 ):
     """
     Groups sequences in a CSV file by similarity and saves the grouped data to a new CSV file.
@@ -31,12 +32,11 @@ def groupby_sequence_csv(
         for group_idx in grouped_data.keys()
     }
 
-    data["group_id"] = ""
+    data[group_output_name] = ""
     data["target_id"] = data["pdb_id"] + "_" + data["chain_id"]
     for group_idx, entries in grouped_data.items():
         indexes = list(entries.keys())
-        data.loc[indexes, "group_id"] = group_names[group_idx]
-
+        data.loc[indexes, group_output_name] = group_names[group_idx]
     data.to_csv(output_csv, index=False)
 
 
@@ -57,6 +57,12 @@ if __name__ == "__main__":
         default=0.9,
         help="Minimum match ratio for grouping sequences",
     )
+    parser.add_argument(
+        "--group_output_name",
+        type=str,
+        default="group_id",
+        help="Name of the group ID column to add",
+    )
     args = parser.parse_args()
     input_csv = Path(args.input_csv)
     output_csv = Path(args.output_csv)
@@ -65,4 +71,5 @@ if __name__ == "__main__":
         input_csv=str(input_csv),
         output_csv=str(output_csv),
         min_match_ratio=args.min_match_ratio,
+        group_output_name=args.group_output_name,
     )

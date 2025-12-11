@@ -1,14 +1,16 @@
 import pandas as pd
 
 
-def to_wide(result_solution, fill_coordinates=None, select=None, pad=None):
+def to_wide(
+    result_solution, fill_coordinates=None, select=None, pad=None, group_key="group_id"
+):
     """
     Convert long format solution dataframe to wide format and save to CSV, keeping only specified atoms.
 
     Keeps all atoms if select is None, otherwise filters to atoms starting with the given prefixes.
     """
     # Columns to keep that must be present
-    keep = ["group_id", "resname", "resid", "solution_id"]
+    keep = [group_key, "resname", "resid", "solution_id"]
     columns = set(result_solution.columns)
     missing = set(keep) - columns
     if missing:
@@ -61,16 +63,15 @@ def to_wide(result_solution, fill_coordinates=None, select=None, pad=None):
         f"{i}_{j}" if j != "" else f"{i}" for i, j in result_solution_selected.columns
     ]
 
-
     # Sort by resid within each group
     result_solution_selected = result_solution_selected.sort_values(
-        by=["group_id", "resid"]
+        by=[group_key, "resid"]
     )
 
     # Reconstruct ID
     result_solution_selected = result_solution_selected.reset_index()
     result_solution_selected["ID"] = (
-        result_solution_selected["group_id"].astype(str)
+        result_solution_selected[group_key].astype(str)
         + "_"
         + (result_solution_selected["resid"]).astype(str)
     )
@@ -132,6 +133,13 @@ if __name__ == "__main__":
         "--drop-column", nargs="+", type=str, help="Drop these columns before saving"
     )
 
+    parser.add_argument(
+        "--group-key",
+        type=str,
+        default="group_id",
+        help="Column defining groups (default: group_id)",
+    )
+
     args = parser.parse_args()
     input_file = Path(args.input_file)
     output_file = Path(args.output_file)
@@ -141,6 +149,7 @@ if __name__ == "__main__":
         fill_coordinates=args.fill_coordinates,
         select=args.select,
         pad=args.pad,
+        group_key=args.group_key,
     )
 
     if args.add_column:

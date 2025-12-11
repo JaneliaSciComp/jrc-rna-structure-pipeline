@@ -18,7 +18,7 @@ if __name__ == "__main__":
         "--sort_by",
         nargs="+",
         type=str,
-        default=["temporal_cutoff, pdb_chain_id"],
+        default=["temporal_cutoff", "target_id"],
         help="Columns to sort by before merging",
     )
     parser.add_argument(
@@ -69,6 +69,9 @@ if __name__ == "__main__":
     merge = args.merge if args.merge else []
     for col in targets.columns:
         if col in merge:
+            targets[col + "_"] = targets[col].apply(
+                lambda x: x[0] if len(x) > 0 else None
+            )
             targets[col] = targets[col].apply(lambda x: ";".join(map(str, x)))
         else:
             targets[col] = targets[col].apply(lambda x: x[0] if len(x) > 0 else None)
@@ -87,6 +90,16 @@ if __name__ == "__main__":
             targets = targets.rename(columns={old_name: new_name})
     if args.sort_by_after:
         targets = targets.sort_values(by=args.sort_by_after)
+
+    to_drop = args.drop if args.drop else []
+    to_drop.extend([col for col in targets.columns if col.endswith("_")])
+    if to_drop:
+        targets = targets.drop(columns=to_drop)
+    # Put pdb_id, chain_id, target_id, auth_chain_id, sequence  at the front if present
+    front_cols = ["pdb_id", "chain_id", "target_id", "auth_chain_id", "sequence"]
+    front_cols = [col for col in front_cols if col in targets.columns]
+    other_cols = [col for col in targets.columns if col not in front_cols]
+    targets = targets[front_cols + other_cols]
 
     targets.to_csv(
         output_file,
