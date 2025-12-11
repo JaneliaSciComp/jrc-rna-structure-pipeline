@@ -2,6 +2,7 @@ from pathlib import Path
 import requests
 import json
 import os
+import copy
 from functools import partial
 from retryhttp import retry
 from utils import parallel_process, relative_symlink
@@ -34,12 +35,34 @@ SEARCH_QUERIES = {
 
 # Query to search for RNA structures in PDB, limit dates and fetch only structures with RNA entities
 def search_rna_structures(
-    start_date="now-1w", stop_date="now", search_type="polymer_type", search_term="RNA"
+    start_date="now-1w",
+    stop_date="now",
+    search_type="polymer_type",
+    search_terms=["RNA"],
 ):
-    search_query = SEARCH_QUERIES.get(search_type)
+    search_query = copy.deepcopy(SEARCH_QUERIES.get(search_type))
     if search_query is None:
         raise ValueError(f"Unsupported search_type: {search_type}")
-    search_query["parameters"]["value"] = search_term
+
+    if len(search_terms) == 0:
+        raise ValueError("At least one search term must be provided")
+    elif len(search_terms) == 1:
+        search_term = search_terms[0]
+        search_query["parameters"]["value"] = search_term
+        main_query = search_query
+    else:
+        # Create OR group for multiple search terms
+        or_nodes = []
+        for term in search_terms:
+            term_query = copy.deepcopy(search_query)
+            term_query["parameters"]["value"] = term
+            or_nodes.append(term_query)
+
+        main_query = {
+            "type": "group",
+            "logical_operator": "or",
+            "nodes": or_nodes,
+        }
 
     query = {
         "query": {
@@ -74,7 +97,7 @@ def search_rna_structures(
                         "value": "Integrative",
                     },
                 },
-                SEARCH_QUERIES[search_type],
+                main_query,
             ],
         },
         "return_type": "entry",
@@ -261,7 +284,11 @@ def main():
         help="Type of search query",
     )
     parser.add_argument(
-        "--search_term", type=str, default="RNA", help="Term to search for"
+        "--search_terms",
+        type=str,
+        default=["RNA"],
+        help="Term to search for",
+        nargs="+",
     )
     parser.add_argument(
         "--output_dir",
@@ -286,7 +313,7 @@ def main():
         start_date=args.start_date,
         stop_date=args.stop_date,
         search_type=args.search_type,
-        search_term=args.search_term,
+        search_terms=args.search_terms,
     )
     print(f"Found {len(rna_pdb_ids)} RNA structures.")
     if len(rna_pdb_ids) > 0:
