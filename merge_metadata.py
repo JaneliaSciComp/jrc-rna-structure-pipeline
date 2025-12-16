@@ -94,6 +94,7 @@ def merge_sequences_and_metadata(
                     * {exclude_clause}
                 FROM sequences
                 LEFT JOIN metadata USING ({join_condition})
+                ORDER BY temporal_cutoff, target_id 
             ) TO '{output_file}' (FORMAT CSV, HEADER)
         """)
         print(f"Results saved to {output_file}")

@@ -16,6 +16,13 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--group_key",
+        type=str,
+        default=None,
+        help="Column to group ids from GROUPED_SEQUENCES file  if not already grouped",
+    )
+
+    parser.add_argument(
         "--id_column",
         type=str,
         default="target_id",
@@ -46,7 +53,30 @@ if __name__ == "__main__":
     args = parser.parse_args()
     cutoff_date = pd.to_datetime(args.cutoff_date)
 
-    data = pd.read_csv(args.grouped_sequences, parse_dates=["temporal_cutoff"])
+    data = pd.read_csv(
+        args.grouped_sequences, parse_dates=["temporal_cutoff"], keep_default_na=False
+    )
+
+    if "all_pdb_ids" not in data.columns:
+        if not args.group_key:
+            print(
+                f"Group key needs to be provided if 'all_pdb_ids' are not present in {args.grouped_sequences}"
+            )
+            exit(1)
+
+        if args.group_key not in data.columns:
+            print(
+                f"Group key '{args.group_key}' not found in {args.grouped_sequences} columns"
+            )
+            exit(1)
+
+        # Group by the specified key to get all PDB ids per group and take the oldest cutoff date
+        data = (
+            data.groupby(args.group_key)[["temporal_cutoff", "target_id"]]
+            .agg({"temporal_cutoff": "min", "target_id": ";".join})
+            .reset_index()
+            .rename(columns={"target_id": "all_pdb_ids"})
+        )
 
     ids_before = (
         data[data["temporal_cutoff"] < cutoff_date]["all_pdb_ids"]

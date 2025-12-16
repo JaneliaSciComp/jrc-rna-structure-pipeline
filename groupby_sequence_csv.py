@@ -7,6 +7,8 @@ def groupby_sequence_csv(
     output_csv: str,
     min_match_ratio: float = 0.9,
     group_output_name: str = "group_id",
+    group_by: str = "sequence",
+    group_name_source: list[str] = ["target_id"],
 ):
     """
     Groups sequences in a CSV file by similarity and saves the grouped data to a new CSV file.
@@ -21,19 +23,16 @@ def groupby_sequence_csv(
 
     # Group sequences
     grouped_data, seq_to_id = collect_grouped_idx(
-        data["sequence"], min_match_ratio=min_match_ratio
+        data[group_by], min_match_ratio=min_match_ratio
     )
     # Get id to group mapping
     # Match group_idx to group name
     group_names = {
-        group_idx: "_".join(
-            data.loc[group_idx, ["pdb_id", "chain_id"]].astype(str).tolist()
-        )
+        group_idx: "_".join(data.loc[group_idx, group_name_source].astype(str).tolist())
         for group_idx in grouped_data.keys()
     }
 
     data[group_output_name] = ""
-    data["target_id"] = data["pdb_id"] + "_" + data["chain_id"]
     for group_idx, entries in grouped_data.items():
         indexes = list(entries.keys())
         data.loc[indexes, group_output_name] = group_names[group_idx]
@@ -63,6 +62,18 @@ if __name__ == "__main__":
         default="group_id",
         help="Name of the group ID column to add",
     )
+    parser.add_argument(
+        "--group_name_source",
+        type=str,
+        default=["target_id"],
+        nargs="+",
+        help="Column name(s) to use for group naming",
+    )
+
+    parser.add_argument(
+        "--group_by", type=str, default="sequence", help="Sequence column to group by"
+    )
+
     args = parser.parse_args()
     input_csv = Path(args.input_csv)
     output_csv = Path(args.output_csv)
@@ -72,4 +83,6 @@ if __name__ == "__main__":
         output_csv=str(output_csv),
         min_match_ratio=args.min_match_ratio,
         group_output_name=args.group_output_name,
+        group_name_source=args.group_name_source,
+        group_by=args.group_by,
     )

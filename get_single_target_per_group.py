@@ -14,6 +14,20 @@ if __name__ == "__main__":
     parser.add_argument(
         "output_file", type=str, help="Output CSV file with single sequence per group"
     )
+
+    parser.add_argument(
+        "--add_group_index_file",
+        type=str,
+        default=None,
+        help="Optional file to store original file with added index of each entry in the group",
+    )
+    parser.add_argument(
+        "--group_index_name",
+        type=str,
+        default="group_index",
+        help="Name of the group index column to add if add_group_index_file is specified",
+    )
+
     parser.add_argument(
         "--sort_by",
         nargs="+",
@@ -59,13 +73,22 @@ if __name__ == "__main__":
     args = parser.parse_args()
     input_file = Path(args.input_file)
     output_file = Path(args.output_file)
-    targets = pd.read_csv(input_file)
+    targets = pd.read_csv(input_file, keep_default_na=False)
 
     # Sort and merge targets
     if args.sort_by:
         targets = targets.sort_values(by=args.sort_by)
 
-    targets = targets.groupby(args.group_key).agg(list)
+    targets_group = targets.groupby(args.group_key)
+    targets = targets_group.agg(list)
+
+    if args.add_group_index_file:
+        group_index = targets_group.cumcount() + 1  # 1-based index
+        targets_with_index = targets.copy()
+        targets_with_index[args.group_index_name] = group_index
+        targets_with_index.to_csv(
+            args.add_group_index_file, float_format="%.3f", index=False
+        )
     merge = args.merge if args.merge else []
     for col in targets.columns:
         if col in merge:
@@ -77,9 +100,6 @@ if __name__ == "__main__":
             targets[col] = targets[col].apply(lambda x: x[0] if len(x) > 0 else None)
 
     targets = targets.reset_index()
-
-    if args.drop:
-        targets = targets.drop(columns=args.drop)
 
     if args.rename:
         # Do the sequential rename instead of one shot to avoid conflicts, renames are applied in order
