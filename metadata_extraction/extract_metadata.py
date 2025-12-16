@@ -61,13 +61,37 @@ def extract_keywords(mmcif_file, metadata, keywords):
     return result
 
 
-def extract_composition_metadata(block):
-    """Extract composition information from mmCIF file."""
+# Default entity type mapping: entity_type -> (column_suffix, display_name)
+DEFAULT_ENTITY_TYPES = {
+    "polyribonucleotide": ("rna", "RNA"),
+    # "polypeptide(L)": ("protein", "Protein"),
+    # "polydeoxyribonucleotide": ("dna", "DNA"),
+    "polydeoxyribonucleotide/polyribonucleotide hybrid": ("na_hybrid", "NA_Hybrid"),
+}
+
+
+def extract_composition_metadata(block, entity_types=None):
+    """Extract composition information from mmCIF file.
+
+    Parameters
+    ----------
+    block : CIFBlock
+        The mmCIF block to extract from
+    entity_types : dict, optional
+        Mapping of entity type names to (column_suffix, display_name) tuples.
+        Defaults to DEFAULT_ENTITY_TYPES if None.
+    """
+    if entity_types is None:
+        entity_types = DEFAULT_ENTITY_TYPES
+
     composition_info = {
-        "rna_fraction": None,
-        "rna_mass": None,
         "total_mass": None,
     }
+
+    # Initialize mass and fraction fields for each entity type
+    for entity_type, (suffix, _) in entity_types.items():
+        composition_info[f"{suffix}_mass"] = None
+        composition_info[f"{suffix}_fraction"] = None
 
     # Get entity information
     entity_category = block.get("entity", None)
@@ -109,28 +133,47 @@ def extract_composition_metadata(block):
             if entity_id in mass_by_id:
                 mass_by_type[poly_type] += mass_by_id[entity_id]
 
-        # Calculate RNA fraction
-        rna_mass = mass_by_type.get("polyribonucleotide", 0.0)
+        # Calculate mass and fraction for each configured entity type
         total_mass = sum(mass_by_type.values())
-
-        composition_info["rna_mass"] = float(rna_mass)
         composition_info["total_mass"] = float(total_mass)
 
-        if total_mass > 0:
-            composition_info["rna_fraction"] = float(rna_mass) / float(total_mass)
+        for entity_type, (suffix, _) in entity_types.items():
+            entity_mass = mass_by_type.get(entity_type, 0.0)
+            composition_info[f"{suffix}_mass"] = float(entity_mass)
+
+            if total_mass > 0:
+                composition_info[f"{suffix}_fraction"] = float(entity_mass) / float(
+                    total_mass
+                )
 
     return composition_info
 
 
-def extract_assembly_metadata(block):
-    """Extract assembly information from mmCIF file."""
+def extract_assembly_metadata(block, entity_types=None):
+    """Extract assembly information from mmCIF file.
+
+    Parameters
+    ----------
+    block : CIFBlock
+        The mmCIF block to extract from
+    entity_types : dict, optional
+        Mapping of entity type names to (column_suffix, display_name) tuples.
+        Defaults to DEFAULT_ENTITY_TYPES if None.
+    """
+    if entity_types is None:
+        entity_types = DEFAULT_ENTITY_TYPES
+
     assembly_info = {
         "num_assemblies": 0,
         "assembly_defined": False,
         "has_symmetry_operators": False,
-        "rna_entities": 0,
-        "rna_copies": 0,
     }
+
+    # Initialize entity and copy counts for each type
+    for entity_type, (suffix, _) in entity_types.items():
+        assembly_info[f"{suffix}_entities"] = 0
+        assembly_info[f"{suffix}_copies"] = 0
+
     # Get assembly generation information
     assembly_gen_category = block.get("pdbx_struct_assembly_gen", None)
 
@@ -183,13 +226,17 @@ def extract_assembly_metadata(block):
     entity_ids = _get_cif_column_array(entity_poly_category, "entity_id")
     types = _get_cif_column_array(entity_poly_category, "type")
     entity_id_to_type = {eid: etype for eid, etype in zip(entity_ids, types)}
-    rna_entities = [
-        entity_id
-        for entity_id in assembly_entity_ids
-        if entity_id_to_type.get(entity_id) == "polyribonucleotide"
-    ]
-    assembly_info["rna_entities"] = len(set(rna_entities))
-    assembly_info["rna_copies"] = len(rna_entities)
+
+    # Count entities and copies for each configured type
+    for entity_type, (suffix, _) in entity_types.items():
+        type_entities = [
+            entity_id
+            for entity_id in assembly_entity_ids
+            if entity_id_to_type.get(entity_id) == entity_type
+        ]
+        assembly_info[f"{suffix}_entities"] = len(set(type_entities))
+        assembly_info[f"{suffix}_copies"] = len(type_entities)
+
     return assembly_info
 
 
@@ -210,8 +257,22 @@ def extract_general_metadata(metadata):
     return general_info
 
 
-def extract_all_metadata(mmcif_file, keywords=[]):
-    """Extract all metadata for a mmCIF file."""
+def extract_all_metadata(mmcif_file, keywords=[], entity_types=None):
+    """Extract all metadata for a mmCIF file.
+
+    Parameters
+    ----------
+    mmcif_file : Path
+        Path to the mmCIF file
+    keywords : list, optional
+        List of keywords to search for
+    entity_types : dict, optional
+        Mapping of entity type names to (column_suffix, display_name) tuples.
+        Defaults to DEFAULT_ENTITY_TYPES if None.
+    """
+    if entity_types is None:
+        entity_types = DEFAULT_ENTITY_TYPES
+
     pdb_id = mmcif_file.stem
     cif_file = pdbx.CIFFile.read(str(mmcif_file))
     block = cif_file.block
@@ -224,8 +285,8 @@ def extract_all_metadata(mmcif_file, keywords=[]):
         "pdb_id": pdb_id,
         "mmcif_file": str(mmcif_file),
         "keywords": extract_keywords(mmcif_file, metadata_str, keywords),
-        "composition": extract_composition_metadata(block),
-        "assembly": extract_assembly_metadata(block),
+        "composition": extract_composition_metadata(block, entity_types),
+        "assembly": extract_assembly_metadata(block, entity_types),
         "general": extract_general_metadata(metadata),
     }
 
@@ -245,7 +306,7 @@ def extract_all_metadata(mmcif_file, keywords=[]):
     )
 
     # Get records by chain
-    chain_metadata = extract_chain_metadata(block)
+    chain_metadata = extract_chain_metadata(block, entity_types)
     metadata_records = []
     for chain_id, metadata in chain_metadata.items():
         metadata.update(flat)
@@ -253,8 +314,20 @@ def extract_all_metadata(mmcif_file, keywords=[]):
     return metadata_records
 
 
-def extract_chain_metadata(block):
-    """Extract per-chain metadata from mmCIF file."""
+def extract_chain_metadata(block, entity_types=None):
+    """Extract per-chain metadata from mmCIF file.
+
+    Parameters
+    ----------
+    block : CIFBlock
+        The mmCIF block to extract from
+    entity_types : dict, optional
+        Mapping of entity type names to (column_suffix, display_name) tuples.
+        Defaults to DEFAULT_ENTITY_TYPES if None.
+    """
+    if entity_types is None:
+        entity_types = DEFAULT_ENTITY_TYPES
+
     chain_metadata = {}
     struct_asym_category = block.get("struct_asym", None)
     entity_poly_category = block.get("entity_poly", None)
@@ -279,7 +352,8 @@ def extract_chain_metadata(block):
 
     for chain_id, entity_id in chain_to_entity.items():
         type_str = entity_to_type.get(entity_id, "unknown")
-        if type_str == "polyribonucleotide":
+        # Processing part of the RNA / RNA-hybrid
+        if "polyribonucleotide" in type_str:
             full_seq = entity_to_seq_full.get(entity_id, "")
             full_seq = full_seq.replace("\n", "").replace(" ", "").strip()
             # Split and use separator that is easier to process later, remove parentheses
@@ -321,11 +395,21 @@ def extract_chain_metadata(block):
                 len(set(mapped_seq_list) - {"A", "U", "G", "C", "X", "N"}) > 0
             )
 
+            remapped_fraction = sum(
+                1
+                for map_res, res in zip(mapped_seq_list, full_seq_list)
+                if map_res != res
+            ) / len(mapped_seq_list)
+
             chain_metadata[chain_id] = {
                 "chain_id": chain_id,
                 "entity_id": entity_id,
+                "entity_type": entity_types.get(type_str, (type_str,))[
+                    0
+                ],  # get simplified entity type
                 "unmapped_canonical": unmapped_canonical,
                 "unmapped_nakb": unmapped_nakb,
+                "mapped_fraction": remapped_fraction,
                 "undefined_residues": undefined_residues,
                 "unexpected_residues": unexpected_residues,
                 "nonstandard_residues": entity_to_nonstandard.get(entity_id, False),
@@ -370,6 +454,15 @@ def extract_chain_metadata(block):
 
     return chain_metadata
 
+def put_columns_front(df, front_cols):
+    """Put specified columns at the front of the DataFrame."""
+    front_cols = [col for col in front_cols if col in df.columns]
+    other_cols = [col for col in df.columns if col not in front_cols]
+    return df[front_cols + other_cols]
+    # Put common columns at the front if present
+    front_cols = [col for col in front_cols if col in df.columns]
+    other_cols = [col for col in df.columns if col not in front_cols]
+    df = df[front_cols + other_cols]
 
 if __name__ == "__main__":
     import sys
@@ -424,17 +517,44 @@ if __name__ == "__main__":
         help="Use multiprocessing via python multiprocessing instead of Dask",
     )
 
+    parser.add_argument(
+        "--entity-types",
+        type=str,
+        default=None,
+        help='JSON string mapping entity types to column suffixes, e.g. \'{"polyribonucleotide": ["rna", "RNA"]}\'',
+    )
+
     args = parser.parse_args()
+
+    # Parse entity types if provided
+    entity_types = None
+    if args.entity_types:
+        import json
+
+        entity_types_dict = json.loads(args.entity_types)
+        # Convert to proper format: list -> tuple
+        entity_types = {k: tuple(v) for k, v in entity_types_dict.items()}
 
     input_dir = Path(args.input_dir)
     file_list = list(input_dir.glob("*.cif"))
     if args.limit is not None:
         file_list = file_list[: args.limit]
 
+    front_cols = [
+        "target_id",
+        "pdb_id",
+        "chain_id",
+        "auth_chain_id",
+        "sequence",
+    ]
     if not args.debug:
         if args.multiprocessing:
             result = parallel_process(
-                partial(extract_all_metadata, keywords=args.keyword),
+                partial(
+                    extract_all_metadata,
+                    keywords=args.keyword,
+                    entity_types=entity_types,
+                ),
                 file_list,
                 desc="Extracting metadata (biotite)",
             )
@@ -443,8 +563,11 @@ if __name__ == "__main__":
             r["temporal_cutoff"] = pd.to_datetime(
                 r["temporal_cutoff"], errors="coerce"
             ).dt.strftime("%Y-%m-%d")
-
-            r.set_index("pdb_id").to_csv(args.output_file, date_format="%Y-%m-%d")
+            # Set target_id
+            r["target_id"] = r["pdb_id"] + "_" + r["auth_chain_id"]
+            r = r.sort_values(by=["temporal_cutoff", "target_id"])
+            r = put_columns_front(r, front_cols)
+            r.to_csv(args.output_file, date_format="%Y-%m-%d", index=False)
         else:
             # Use Dask bag for parallel processing
             import dask.bag as db
@@ -457,24 +580,39 @@ if __name__ == "__main__":
             print(f"Processing {len(file_list)} mmCIF files...")
             b = db.from_sequence(file_list, npartitions=22)
 
-            b.map(
-                partial(extract_all_metadata, keywords=args.keyword)
-            ).flatten().to_dataframe().set_index("pdb_id").to_csv(
-                args.output_file, date_format="%Y-%m-%d"
-            )  # , engine="pyarrow", compression="gzip")
+            df = (
+                b.map(
+                    partial(
+                        extract_all_metadata,
+                        keywords=args.keyword,
+                        entity_types=entity_types,
+                    )
+                )
+                .flatten()
+                .to_dataframe()
+            )
+            df["target_id"] = df["pdb_id"] + "_" + df["auth_chain_id"]
+            df = df.sort_values(by=["temporal_cutoff", "target_id"])
+            df = put_columns_front(df, front_cols)
+            df.to_csv(args.output_file, date_format="%Y-%m-%d", index=False)
 
     else:
         result = pd.DataFrame()
         for cif_file in file_list:
             print(f"Processing {cif_file}...")
-            metadata = extract_all_metadata(cif_file, keywords=args.keyword)
+            metadata = extract_all_metadata(
+                cif_file, keywords=args.keyword, entity_types=entity_types
+            )
             result = pd.concat([result, pd.DataFrame(metadata)], axis=0)
         result = result.set_index("pdb_id")
         # Proper format
         result["temporal_cutoff"] = pd.to_datetime(
             result["temporal_cutoff"], errors="coerce"
         ).dt.strftime("%Y-%m-%d")
-        result.to_csv(args.output_file, date_format="%Y-%m-%d")
+        result["target_id"] = result["pdb_id"] + "_" + result["auth_chain_id"]
+        result = result.sort_values(by=["temporal_cutoff", "target_id"])
+        result = put_columns_front(result, front_cols)
+        result.to_csv(args.output_file, date_format="%Y-%m-%d", index=False)
 
     # print(f"Processing {len(file_list)} mmCIF files...")
     # print(args.keyword)
