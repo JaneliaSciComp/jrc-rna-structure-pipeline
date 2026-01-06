@@ -1,10 +1,12 @@
 from pathlib import Path
+import traceback
 import requests
 import multiprocessing as mp
 from tqdm import tqdm
 import pandas as pd
 import subprocess
 import os
+from functools import partial
 
 
 # Function to fetch the publication date for a PDB ID
@@ -88,18 +90,41 @@ def run_cdhit_clustering(
 
     return df
 
+def _error_catcher(function, args, stop_on_error=False):
+    try:
+        return function(args)
+    except Exception as e:
+        print(f"Error processing {args}: {e}")
+        print(traceback.format_exc())
+        if stop_on_error:
+            raise e
+
+        return None
+
 
 def parallel_process(
     function: callable,
     data_list: list,
     num_processes: int = mp.cpu_count(),
     desc: str = "",
+    stop_on_error: bool = False,
 ):
     """Utility function to parallelize processing using multiprocessing. With progress bar."""
+
     l = len(data_list)
+    num_processes = min(num_processes, l)
     print(f"Processing {l} items using {num_processes} processes...")
-    with mp.Pool(processes=min(num_processes, l)) as pool:
-        results = list(tqdm(pool.imap(function, data_list), total=l, desc=desc))
+    with mp.Pool(processes=num_processes) as pool:
+        results = list(
+            tqdm(
+                pool.imap(
+                    partial(_error_catcher, function, stop_on_error=stop_on_error),
+                    data_list,
+                ),
+                total=l,
+                desc=desc,
+            )
+        )
     return results
 
 def relative_symlink(src: Path, dst: Path):
