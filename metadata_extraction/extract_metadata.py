@@ -459,10 +459,6 @@ def put_columns_front(df, front_cols):
     front_cols = [col for col in front_cols if col in df.columns]
     other_cols = [col for col in df.columns if col not in front_cols]
     return df[front_cols + other_cols]
-    # Put common columns at the front if present
-    front_cols = [col for col in front_cols if col in df.columns]
-    other_cols = [col for col in df.columns if col not in front_cols]
-    df = df[front_cols + other_cols]
 
 if __name__ == "__main__":
     import sys

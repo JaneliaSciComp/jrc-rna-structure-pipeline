@@ -76,7 +76,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/fonts-conda-forge-1-hc364b38_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/fonttools-4.60.1-pyh7db6752_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/freetype-2.14.1-ha770c72_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/fsspec-2025.10.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/fsspec-2025.12.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/gawk-5.3.1-hcd3d067_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/gflags-2.2.2-h5888daf_1005.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/glog-0.7.1-hbabe93e_0.conda
@@ -398,7 +398,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/fonts-conda-forge-1-hc364b38_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/fonttools-4.60.1-pyh7db6752_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/freetype-2.14.1-ha770c72_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/fsspec-2025.10.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/fsspec-2025.12.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/gawk-5.3.1-hcd3d067_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/gflags-2.2.2-h5888daf_1005.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/glog-0.7.1-hbabe93e_0.conda
@@ -1613,17 +1613,17 @@ packages:
   purls: []
   size: 173114
   timestamp: 1757945422243
-- conda: https://conda.anaconda.org/conda-forge/noarch/fsspec-2025.10.0-pyhd8ed1ab_0.conda
-  sha256: df5cb57bb668cd5b2072d8bd66380ff7acb12e8c337f47dd4b9a75a6a6496a6d
-  md5: d18004c37182f83b9818b714825a7627
+- conda: https://conda.anaconda.org/conda-forge/noarch/fsspec-2025.12.0-pyhd8ed1ab_0.conda
+  sha256: 64a4ed910e39d96cd590d297982b229c57a08e70450d489faa34fd2bec36dbcc
+  md5: a3b9510e2491c20c7fc0f5e730227fbb
   depends:
   - python >=3.10
   license: BSD-3-Clause
   license_family: BSD
   purls:
-  - pkg:pypi/fsspec?source=hash-mapping
-  size: 146592
-  timestamp: 1761840236679
+  - pkg:pypi/fsspec?source=compressed-mapping
+  size: 147391
+  timestamp: 1764784920938
 - conda: https://conda.anaconda.org/conda-forge/linux-64/gawk-5.3.1-hcd3d067_0.conda
   sha256: ec4ebb9444dccfcbff8a2d19b2811b48a20a58dcd08b29e3851cb930fc0f00d8
   md5: 91d4414ab699180b2b0b10b8112c5a2f
