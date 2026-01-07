@@ -24,7 +24,7 @@ try:
 except ImportError:
     has_biotite = False
 # Import parse_fasta from the tools/fasta directory
-sys.path.insert(0, str(Path(__file__).parent / "tools/fasta"))
+sys.path.insert(0, str(Path(__file__).parents[1] / "tools/fasta"))
 from chain_parser import parse_fasta
 
 csv.field_size_limit(sys.maxsize)
