@@ -11,6 +11,7 @@ from utils import parallel_process, relative_symlink
 SEARCH_API = "https://search.rcsb.org/rcsbsearch/v2/query"
 DOWNLOAD_PDB = "https://files.rcsb.org/download/{pdb_id}.pdb"
 DOWNLOAD_CIF = "https://files.rcsb.org/download/{pdb_id}.cif"
+DOWNLOAD_ASSEMBLY_CIF = "https://files.rcsb.org/download/{pdb_id}-assembly1.cif.gz"
 DOWNLOAD_FASTA = "https://www.rcsb.org/fasta/entry/{pdb_id}"
 SUMMARY_API = "https://data.rcsb.org/rest/v1/core/entry/{pdb_id}"
 
@@ -174,6 +175,7 @@ def fetch_structure_data(pdb_id, output_dir, cache_dir=None):
         "PDB_ID": pdb_id,
         "PDB_File": None,
         "CIF_File": None,
+        "Assembly_CIF_File": None,
         "FASTA_File": None,
         "Metadata_File": None,
     }
@@ -208,6 +210,15 @@ def fetch_structure_data(pdb_id, output_dir, cache_dir=None):
         DOWNLOAD_FASTA.format(pdb_id=pdb_id), fasta_file_path, cache_dir=cache_dir
     ):
         structure_info["FASTA_File"] = fasta_file_path
+
+    # Download Assembly CIF file
+    assembly_cif_file_path = os.path.join(output_dir, f"{pdb_id}-assembly1.cif.gz")
+    if download_and_save(
+        DOWNLOAD_ASSEMBLY_CIF.format(pdb_id=pdb_id),
+        assembly_cif_file_path,
+        cache_dir=cache_dir,
+    ):
+        structure_info["Assembly_CIF_File"] = assembly_cif_file_path
 
     return structure_info
 

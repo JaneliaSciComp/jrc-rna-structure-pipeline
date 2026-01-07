@@ -70,6 +70,13 @@ if __name__ == "__main__":
         default=["temporal_cutoff", "target_id"],
         help="Columns to sort by after merging",
     )
+
+    parser.add_argument(
+        "--multichain",
+        action="store_true",
+        help="Indicates multiple entries separated by ; in group-key column. Compared independent of order (sorted before comparison).",
+    )
+
     args = parser.parse_args()
     input_file = Path(args.input_file)
     output_file = Path(args.output_file)
@@ -79,6 +86,11 @@ if __name__ == "__main__":
     if args.sort_by:
         targets = targets.sort_values(by=args.sort_by)
 
+    if args.multichain:
+        # Sort entries in group key to make comparison independent of order
+        targets[args.group_key] = targets[args.group_key].apply(
+            lambda x: ";".join(sorted(x.split(";")))
+        )
     targets_group = targets.groupby(args.group_key)
     targets = targets_group.agg(list)
 
@@ -107,7 +119,7 @@ if __name__ == "__main__":
             print(f"Renaming column: {old_name} -> {new_name}")
             # drop exising columns to avoid conflicts
             targets = targets.drop(columns=[new_name], errors="ignore")
-            targets = targets.rename(columns={old_name: new_name})
+            targets = targets.rename(columns={old_name: new_name}, errors="raise")
     if args.sort_by_after:
         targets = targets.sort_values(by=args.sort_by_after)
 

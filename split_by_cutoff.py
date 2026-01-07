@@ -23,6 +23,13 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--reference_key",
+        type=str,
+        default="target_id",
+        help="Column with PDB/chain IDs in the GROUPED_SEQUENCES file",
+    )
+
+    parser.add_argument(
         "--id_column",
         type=str,
         default="target_id",
@@ -71,25 +78,35 @@ if __name__ == "__main__":
             exit(1)
 
         # Group by the specified key to get all PDB ids per group and take the oldest cutoff date
-        data = (
-            data.groupby(args.group_key)[["temporal_cutoff", "target_id"]]
-            .agg({"temporal_cutoff": "min", "target_id": ";".join})
-            .reset_index()
-            .rename(columns={"target_id": "all_pdb_ids"})
-        )
+        # Get oldest date per group
 
-    ids_before = (
-        data[data["temporal_cutoff"] < cutoff_date]["all_pdb_ids"]
-        .str.split(";", expand=True)
-        .stack()
-        .unique()
-    )
-    ids_after = (
-        data[data["temporal_cutoff"] >= cutoff_date]["all_pdb_ids"]
-        .str.split(";", expand=True)
-        .stack()
-        .unique()
-    )
+        cutoff_by_group = data.groupby(args.group_key)["temporal_cutoff"].min()
+        # Assign to rows
+        data = data.merge(
+            cutoff_by_group.rename("group_temporal_cutoff"),
+            left_on=args.group_key,
+            right_index=True,
+        )
+        data = data[[args.reference_key, "group_temporal_cutoff"]].copy()
+        data = data.rename(columns={"group_temporal_cutoff": "temporal_cutoff"})
+        data = data.groupby(args.reference_key)["temporal_cutoff"].min().reset_index()
+    else:
+        # We already have grouped data
+        if args.reference_key is not None:
+            print("Warning: reference_key is ignored if  all_pdb_ids column is present")
+        data = data[["all_pdb_ids", "temporal_cutoff"]].copy()
+        # Split to row per pdb_id
+        data = data.assign(all_pdb_ids=data["all_pdb_ids"].str.split(";")).explode(
+            "all_pdb_ids"
+        )
+        data = data.rename(columns={args.reference_key: "all_pdb_ids"})
+
+    ids_before = data[data["temporal_cutoff"] < cutoff_date][
+        args.reference_key
+    ].unique()
+    ids_after = data[data["temporal_cutoff"] >= cutoff_date][
+        args.reference_key
+    ].unique()
 
     split_file = Path(args.split_file)
 

@@ -118,7 +118,9 @@ if __name__ == "__main__":
         ref_df = pd.read_csv(reference_file)
 
         # Extract only the join key and group key from reference
-        ref_cols = [args.join_key, args.group_key]
+        ref_cols = set(
+            [args.join_key, args.group_key] + (args.sort_by if args.sort_by else [])
+        )
         ref_cols = [col for col in ref_cols if col in ref_df.columns]
         ref_df = ref_df[ref_cols].drop_duplicates()
     else:
