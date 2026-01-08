@@ -124,4 +124,4 @@ The pipeline generates several output files:
 ## Workflow backwards compatibility
 
 Currently we do not maintain backwards compatibility between different versions. Ie. the workflow setup for the current version of the repository may not execute correctly
-with newer version of the repository. We use versioned releases to track the compatible versions.
+with newer version of the repository. We use versioned releases / tags to track the compatible versions.
